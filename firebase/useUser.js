@@ -1,7 +1,7 @@
 import { useEffect, useState, createContext, useContext } from "react";
 import { useRouter } from "next/router";
 import firebase from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { getAuth } from "firebase/compat/auth";
 import initFirebase from "../firebase/initFirebase";
 import {
   removeUserCookie,
