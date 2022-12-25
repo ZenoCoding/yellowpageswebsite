@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+h1 {
+  @apply text-2xl font-extrabold;
+}
+h2 {
+  @apply text-xl font-bold;
+}
+h3 {
+  @apply text-lg font-semibold;
+}
+
+p {
+  @apply mb-3;
+}
+
+textarea {
+  @apply w-full border-2 text-xs h-80;
+}
+
+button {
+  @apply border-2;
+}
+
+.imageContainer {
+  max-height: 9rem;
+  height: 100%;
+  width: auto;
+  display: flex;
+  justify-content: center;  
+  align-items: center;
+  
+  
+  /* & > span {
+      position: unset !important;
+      height: 100%;
+  } */
+
+  .image {
+      object-fit: contain;
+      width: auto !important;
+      position: relative !important;
+      height: auto !important;
+  }
+}
+/* html,
+body {
+  padding: 0;
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen,
+    Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
+  line-height: 1.6;
+  font-size: 18px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: #0070f3;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+} */
