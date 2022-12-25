@@ -1,11 +1,12 @@
 import firebase from "firebase/compat/app";
-import { getApps, initializeApp, getApp } from "firebase/compat/app"
+import { getApps, initializeApp, getApp } from "firebase/app"
+import { getAnalytics, logEvent } from "firebase/analytics";
 // the below imports are option - comment out what you don't need
-import "firebase/compat/auth";
-import "firebase/compat/firestore";
-import "firebase/compat/storage";
-import "firebase/compat/analytics";
-import "firebase/compat/performance";
+// import "firebase/auth";
+// import "firebase/firestore";
+// import "firebase/storage";
+// import "firebase/analytics";
+// import "firebase/performance";
 
 const clientCredentials = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -26,8 +27,8 @@ export default function initFirebase() {
         if (typeof window !== "undefined") {
             // Enable analytics. https://firebase.google.com/docs/analytics/get-started
             if ("measurementId" in clientCredentials) {
-                firebase.analytics();
-                firebase.performance();
+                const analytics = getAnalytics();
+                logEvent(analytics, 'notification_received');
             }
         }
         console.log("Firebase was successfully init.");
