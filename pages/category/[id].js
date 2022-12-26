@@ -45,16 +45,16 @@ export default function Home({ articleData }) {
   );
 }
 
-export async function getStaticPaths() {
-    const paths = categories.map(x => ({"params":{"id": x}}))
-    console.log(paths)
-    return {
-      paths,
-      fallback: false
-    }
-  }
+// export async function getStaticPaths() {
+//     const paths = categories.map(x => ({"params":{"id": x}}))
+//     console.log(paths)
+//     return {
+//       paths,
+//       fallback: false
+//     }
+//   }
 
-export async function getStaticProps({ params }) {
+export async function getServerSideProps({ params }) {
   const allArticleData = await getAllArticleData()
   function isCategory (article) {
     if (article.tags == null) {

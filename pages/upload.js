@@ -2,7 +2,7 @@ import Date from '../components/date'
 import { getAdmins } from '../lib/firebase'
 import { getApp } from "firebase/app"
 import { doc, getFirestore, collection, getDocs, getDoc, updateDoc, setDoc } from "firebase/firestore"
-import { getDownloadURL, getStorage, getStream, ref, getBytes, uploadBytes } from "firebase/storage";
+import { getDownloadURL, getStorage, getStream, ref, getBytes, uploadBytesResumable } from "firebase/storage";
 import matter from 'gray-matter';
 import { remark } from 'remark';
 import { useRouter } from 'next/router'; 
@@ -41,7 +41,7 @@ export default function Upload({ admins }) {
   };
   if (!inc) {
     return (<div>Sry you're not authorized.<Link legacyBehavior href="/">
-    <a onClick={(e) => handleClick(e)}>
+    <a className = "border-2" onClick={(e) => handleClick(e)}>
           Sign out
         </a>
   </Link> </div> )
@@ -68,7 +68,7 @@ export default function Upload({ admins }) {
 title: "Placeholder Title"
 date: "1000-01-01"
 author: [""]
-tags: []
+tags: [""]
 ---
 `);
   const [htmlData, setHtmlData] = useState("");
@@ -76,6 +76,7 @@ tags: []
   const [dateData, setDateData] = useState("1000-01-01");
   const [errorData, setErrorData] = useState("");
   const [authorData, setAuthorData] = useState(makeCommaSeparatedString([""], true));
+  const [uploadData, setUploadData] = useState("")
   // console.log(content)
   // const handleTextChange = event => {
   //   // 👇️ access textarea value
@@ -139,18 +140,58 @@ tags: []
       date: matterResult.data.date,
       author: matterResult.data.author,
       title: matterResult.data.title,
+      tags: matterResult.data.tags,
       path
       });
     var file = new Blob([formData], { type: "text/plain" });
-    const uploadTask = uploadBytes(markdownRef, file);
+    const uploadTask = uploadBytesResumable(markdownRef, file);
+    uploadTask.on('state_changed',
+      (snapshot) => {
+        // Get task progress, including the number of bytes uploaded and the total number of bytes to be uploaded
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        setUploadData('Upload is ' + progress + '% done');
+        switch (snapshot.state) {
+          case 'paused':
+            setUploadData('Upload is paused');
+            break;
+          case 'running':
+            setUploadData('Uploading...');
+            break;
+        }
+      }, 
+      (error) => {
+        // A full list of error codes is available at
+        // https://firebase.google.com/docs/storage/web/handle-errors
+        switch (error.code) {
+          case 'storage/unauthorized':
+            // User doesn't have permission to access the object
+            break;
+          case 'storage/canceled':
+            // User canceled the upload
+            break;
+
+          // ...
+
+          case 'storage/unknown':
+            // Unknown error occurred, inspect error.serverResponse
+            break;
+        }
+      }, 
+      () => {
+        // Upload completed successfully, now we can get the download URL
+        getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
+          setUploadData("Upload Successful! The article should be in the database now...theoretically...reload homepage or category page to check");
+        });
+      }
+    );
   }
 
   return (
     <div className="bg-white">
-      <div className="mx-auto max-w-2xl px-4 sm:px-6 lg:max-w-7xl lg:px-8">
+      <div className="m-auto max-w-2xl my-10">
       <div><div>Wow! What an ugly upload page! Maybe I'll make it look better some other day. <br/>
       <Link legacyBehavior href="/">
-        <a onClick={(e) => handleClick(e)}>
+        <a className = "border-2" onClick={(e) => handleClick(e)}>
           Sign out
         </a>
       </Link>  
@@ -161,10 +202,11 @@ tags: []
       <textarea type="text" id="updateText" value={formData} onChange = {async () => await update()}/> 
       {errorData}
       <div onClick={async () => await upload()}>If you wanna upload this article, click this - <button>Submit</button></div>
-      
+      <div className="font-bold italic">{uploadData}</div>
+      <br></br>
       <h1>Below is the drafted article: </h1> 
       <div>
-        <hr className="my-10 bg-gray-900 dark:bg-gray-200"/> 
+        <hr className="my-5 bg-gray-900 dark:bg-gray-200"/> 
         </div>
       <article>
       <h1 className = "text-4xl mb-1">{titleData}</h1>
@@ -182,7 +224,7 @@ tags: []
 </div>
 )};
 
-export async function getStaticProps({ params }) {
+export async function getServerSideProps({ params }) {
   const admins = await getAdmins();
   const ret = admins.admins;
   return {

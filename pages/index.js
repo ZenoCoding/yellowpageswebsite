@@ -38,7 +38,7 @@ export default function Home({ allArticleData }) {
   );
 }
 
-export async function getStaticProps() {
+export async function getServerSideProps() {
   const allArticleData = await getAllArticleData()
   return {
     props: {
