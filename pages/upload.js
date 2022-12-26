@@ -180,7 +180,7 @@ tags: []
         </div>
     </div>
 </div>
-);
+)};
 
 export async function getStaticProps({ params }) {
   const admins = await getAdmins();
