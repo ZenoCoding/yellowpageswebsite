@@ -1,8 +1,5 @@
-import Layout from '../components/layout'
-import Head from 'next/head'
 import Date from '../components/date'
 import { getAdmins } from '../lib/firebase'
-import utilStyles from '../styles/utils.module.css'
 import { getApp } from "firebase/app"
 import { doc, getFirestore, collection, getDocs, getDoc, updateDoc, setDoc } from "firebase/firestore"
 import { getDownloadURL, getStorage, getStream, ref, getBytes, uploadBytes } from "firebase/storage";
@@ -148,47 +145,43 @@ tags: []
     const uploadTask = uploadBytes(markdownRef, file);
   }
 
-  return (<Layout>
-    {/* <Head>
-      <title>{titleData}</title>
-    </Head> */}
-    <div><div>Wow! What an ugly upload page! Maybe I'll make it look better some other day. <br/>
-    <Link legacyBehavior href="/">
-      <a onClick={(e) => handleClick(e)}>
-        Sign out
-      </a>
-    </Link>  
-    </div>
-    <br/>
-    <div>Here are some basic instructions: <a href="https://docs.google.com/document/d/1_lNHBxtpaBa1JRqrbapmCj_L_k-yfSsTSkgGp_1pnL0/edit?usp=sharing">Google Docs Link</a></div>
+  return (
+    <div className="bg-white">
+      <div className="mx-auto max-w-2xl px-4 sm:px-6 lg:max-w-7xl lg:px-8">
+      <div><div>Wow! What an ugly upload page! Maybe I'll make it look better some other day. <br/>
+      <Link legacyBehavior href="/">
+        <a onClick={(e) => handleClick(e)}>
+          Sign out
+        </a>
+      </Link>  
+      </div>
+      <br/>
+      <div>Here are some basic instructions: <a href="https://docs.google.com/document/d/1_lNHBxtpaBa1JRqrbapmCj_L_k-yfSsTSkgGp_1pnL0/edit?usp=sharing">Google Docs Link</a></div>
 
-    <textarea type="text" id="updateText" value={formData} onChange = {async () => await update()}/> 
-    {errorData}
-    <div onClick={async () => await upload()}>If you wanna upload this article, click this - <button>Submit</button></div>
-    
-    </div>
-    <h1>Below is the drafted article: </h1> 
-    <div>
-      <hr className="my-10 bg-gray-900 dark:bg-gray-200"/> 
-      </div>
-    <article>
-    <h1 className = "text-4xl mb-1">{titleData}</h1>
-    <div className="text-gray-500">
-        <Date dateString={dateData} />
-      </div>
-      <div className="text-gray-500 mb-4">
-        By {authorData}
-      </div>
+      <textarea type="text" id="updateText" value={formData} onChange = {async () => await update()}/> 
+      {errorData}
+      <div onClick={async () => await upload()}>If you wanna upload this article, click this - <button>Submit</button></div>
       
-      <div dangerouslySetInnerHTML={{ __html: htmlData }} />
-    </article>
-    
-  </Layout>
-  
-  
-    
-    );
-};
+      <h1>Below is the drafted article: </h1> 
+      <div>
+        <hr className="my-10 bg-gray-900 dark:bg-gray-200"/> 
+        </div>
+      <article>
+      <h1 className = "text-4xl mb-1">{titleData}</h1>
+      <div className="text-gray-500">
+          <Date dateString={dateData} />
+        </div>
+        <div className="text-gray-500 mb-4">
+          By {authorData}
+        </div>
+        
+        <div dangerouslySetInnerHTML={{ __html: htmlData }} />
+      </article>
+        </div>
+    </div>
+</div>
+);
+
 export async function getStaticProps({ params }) {
   const admins = await getAdmins();
   const ret = admins.admins;

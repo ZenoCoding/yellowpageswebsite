@@ -1,8 +1,5 @@
-import Layout from '../../components/layout'
 import { getArticleContent, getAllArticleIds, getAdmins } from '../../lib/firebase'
-import Head from 'next/head'
 import Date from '../../components/date'
-import utilStyles from '../../styles/utils.module.css'
 import { getApp } from "firebase/app"
 import { doc, getFirestore, collection, getDocs, getDoc, updateDoc } from "firebase/firestore"
 import { getDownloadURL, getStorage, getStream, ref, getBytes, uploadBytesResumable } from "firebase/storage";

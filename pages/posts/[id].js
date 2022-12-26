@@ -1,8 +1,5 @@
-import Layout from '../../components/layout'
 import { getArticleContent, getAllArticleIds } from '../../lib/firebase'
-import Head from 'next/head'
 import Date from '../../components/date'
-import utilStyles from '../../styles/utils.module.css'
 import Link from "next/link"
 import { makeCommaSeparatedString } from '../../lib/makeCommaSeparatedString'
 

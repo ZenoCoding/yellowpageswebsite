@@ -1,11 +1,5 @@
-import Head from 'next/head'
-import Layout, { siteTitle } from '../components/layout'
-import utilStyles from '../styles/utils.module.css'
 import { getAllArticleData  } from '../lib/firebase'
 import Link from 'next/link'
-import Date from '../components/date'
-import yellowPages5 from '../public/images/yellowPages5.png'
-import Image from "next/image"
 import Navbar from "../components/Navbar.js"
 import { parseISO, format } from 'date-fns'
 import { makeCommaSeparatedString } from '../lib/makeCommaSeparatedString'
@@ -26,10 +20,10 @@ export default function Home({ allArticleData }) {
           {allArticleData.map(({ id, date, author, title, tags }) => (
             <div className="h-min w-full max-w-sm overflow-hidden rounded-lg bg-gray-200">
             <Link href={`/posts/${id}`} legacyBehavior> 
-              <a class="block max-w-sm p-3 bg-white border border-slate-700 rounded-lg shadow-md hover:bg-gray-100 hover:no-underline dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700">
-                  <h5 class="leading-snug text-lg font-semibold tracking-tight text-gray-900 dark:text-white">{title}</h5>
-                  <h5 class="mb-0.5 text-sm tracking-tight text-gray-500 dark:text-white">By {makeCommaSeparatedString(author)} | {format(parseISO(date), 'LLLL d, yyyy')}</h5>
-                  <p class="mb-0.5 text-sm text-gray-700 dark:text-gray-400">Here are the biggest enterprise technology acquisitions of 2021 so far, in reverse chronological order.</p>
+              <a className="block max-w-sm p-3 bg-white border border-slate-700 rounded-lg shadow-md hover:bg-gray-100 hover:no-underline dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700">
+                  <h5 className="leading-snug text-lg font-semibold tracking-tight text-gray-900 dark:text-white">{title}</h5>
+                  <h5 className="mb-0.5 text-sm tracking-tight text-gray-500 dark:text-white">By {makeCommaSeparatedString(author)} | {format(parseISO(date), 'LLLL d, yyyy')}</h5>
+                  <p className="mb-0.5 text-sm text-gray-700 dark:text-gray-400">Here are the biggest enterprise technology acquisitions of 2021 so far, in reverse chronological order.</p>
               </a>
             </Link>
           </div>

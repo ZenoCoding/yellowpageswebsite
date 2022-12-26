@@ -1,6 +1,7 @@
 import firebase from "firebase/compat/app";
 import { getApps, initializeApp, getApp } from "firebase/app"
-import { getAnalytics, logEvent } from "firebase/analytics";
+// import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
 // the below imports are option - comment out what you don't need
 // import "firebase/auth";
 // import "firebase/firestore";
@@ -27,8 +28,8 @@ export default function initFirebase() {
         if (typeof window !== "undefined") {
             // Enable analytics. https://firebase.google.com/docs/analytics/get-started
             if ("measurementId" in clientCredentials) {
-                const analytics = getAnalytics();
-                logEvent(analytics, 'notification_received');
+                firebase.analytics();
+                firebase.performance();
             }
         }
         console.log("Firebase was successfully init.");
