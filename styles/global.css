@@ -23,6 +23,67 @@ textarea {
 button {
   @apply border-2;
 }
+ul {
+  @apply list-disc;
+  padding-left: 20px;
+}
+.break-inside {
+  break-inside: avoid;
+}
+
+
+
+/* @keyframes spin {
+  0% {
+    transform: rotateY(0deg), rotateZ(0deg); }
+  25% {
+    transform: rotateY(180deg), rotateZ(0deg); }
+  50% {
+   transform: rotateY(180deg), rotateZ(180deg); }
+   75% {
+    transform: rotateY(360deg), rotateZ(180deg); }
+  100% {
+    transform: rotateY(360deg), rotateZ(360deg); }
+}
+@keyframes spins {
+  0% {
+    transform: rotateY(0deg), rotateZ(0deg); }
+  25% {
+    transform: rotateY(180deg), rotateZ(0deg); }
+  50% {
+   transform: rotateY(180deg), rotateZ(180deg); }
+   75% {
+    transform: rotateY(360deg), rotateZ(180deg); }
+  100% {
+    transform: rotateY(360deg), rotateZ(360deg); }
+} */
+@keyframes spinss {
+  0% {
+    transform: rotateY(0deg); }
+  25% {
+    transform: rotateZ(0deg); }
+  50% {
+    transform: rotateY(180deg); }
+    75% {
+      transform: rotateZ(180deg); }
+}
+/* @keyframes spinZ1 {
+  from { transform: rotateZ(0deg); }
+  to {transform: rotateZ(180deg); }
+} */
+/* @keyframes spinY2 {
+  from { transform: rotateY(180deg); }
+  to {transform: rotateY(360deg); }
+}
+@keyframes spinZ2 {
+  from { transform: rotateY(180deg); }
+  to {transform: rotateY(360deg); }
+} */
+
+.rotate{
+  animation: spinss 4s infinite;
+}
+
 
 .imageContainer {
   max-height: 9rem;

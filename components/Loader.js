@@ -1,9 +1,10 @@
 const Loader = () => {
     return (
-      <div className="container mx-auto my-20">
-        <h1 className="text-6xl text-blue text-center font-extrabold">
+      <div className="hero container w-screen h-screen m-auto">
+        {/* <h1 className="text-6xl text-center font-light">
           Loading...
-        </h1>
+        </h1> */}
+        <img src="/images/yellowPages.png" className = "absolute rotate w-14 h-14 left-1/2 bottom-1/2"></img>
       </div>
     );
   };

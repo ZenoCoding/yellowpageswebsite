@@ -192,7 +192,7 @@ const router = useRouter();
 
   return (
         
-      <div className="m-auto max-w-2xl my-10">
+      <div className="m-auto max-w-2xl my-10  mx-5">
         <h1 className = "text-4xl mb-1">{titleData}</h1>
         <div className="text-gray-500">
           <Date dateString={dateData} />

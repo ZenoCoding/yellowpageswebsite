@@ -3,6 +3,7 @@ import Link from 'next/link'
 import Navbar from "../components/Navbar.js"
 import { parseISO, format } from 'date-fns'
 import { makeCommaSeparatedString } from '../lib/makeCommaSeparatedString'
+import Loader from "../components/Loader"
 
 export default function Home({ allArticleData }) {
   return (
@@ -18,7 +19,7 @@ export default function Home({ allArticleData }) {
             {/* <h3 className="mt-4 text-sm text-gray-700">Xacto Blades, Goblet, Altered Shadow</h3>
             <p className="mt-1 text-lg font-medium text-gray-900">Tsunami Blades</p> */}
           {allArticleData.map(({ id, date, author, title, tags, blurb }) => (
-            <div className="h-min w-full max-w-sm overflow-hidden rounded-lg bg-gray-200 mx-auto">
+            <div className="break-inside h-min w-full max-w-sm overflow-hidden rounded-lg bg-gray-200 mx-auto">
             <Link href={`/posts/${id}`} legacyBehavior> 
               <a className="block max-w-sm p-3 bg-white border border-slate-700 rounded-lg shadow-md hover:bg-gray-100 hover:no-underline dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700">
                   <h5 className="leading-snug text-lg font-semibold tracking-tight text-gray-900 dark:text-white">{title}</h5>
@@ -28,6 +29,7 @@ export default function Home({ allArticleData }) {
             </Link>
           </div>
           ))}
+          {/* <Loader/> */}
             {/* <h3 className="mt-4 text-sm text-gray-700">Charcoal</h3>
             <p className="mt-1 text-lg font-medium text-gray-900">Monte Cristo Bust</p>
           </a> */}

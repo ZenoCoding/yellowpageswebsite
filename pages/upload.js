@@ -122,7 +122,10 @@ blurb: ""
 
   async function upload() {
     // uploadMarkdown(formData, articleId);
-    
+    if (errorData != "") {
+      setUploadData("There's unresolved errors bro.")
+      return;
+    }
     
     var urlify = require('urlify').create({
       addEToUmlauts:true,
@@ -201,7 +204,7 @@ blurb: ""
       </Link>  
       </div>
       <br/>
-      <div>Here are some basic instructions: <a href="https://docs.google.com/document/d/1_lNHBxtpaBa1JRqrbapmCj_L_k-yfSsTSkgGp_1pnL0/edit?usp=sharing">Google Docs Link</a></div>
+      <div>Here are some basic instructions: <a className = "underline" href="https://docs.google.com/document/d/1_lNHBxtpaBa1JRqrbapmCj_L_k-yfSsTSkgGp_1pnL0/edit?usp=sharing">Google Docs Link</a></div>
 
       <textarea type="text" id="updateText" value={formData} onChange = {async () => await update()}/> 
       <div>The blurb is currently {blurbLen} characters long.</div>
