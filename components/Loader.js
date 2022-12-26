@@ -4,7 +4,7 @@ const Loader = () => {
         {/* <h1 className="text-6xl text-center font-light">
           Loading...
         </h1> */}
-        <img src="/images/yellowPages.png" className = "absolute rotate w-14 h-14 left-1/2 bottom-1/2"></img>
+        <img src="/images/yellowpages.png" className = "absolute rotate w-14 h-14 left-1/2 bottom-1/2"></img>
       </div>
     );
   };
