@@ -13,6 +13,7 @@ import html from 'remark-html';
 import Link from 'next/link'
 import { parseISO, format } from 'date-fns'
 import { checkCategory } from '../../lib/checkCategory'
+import { checkBlurb } from '../../lib/checkBlurb'
 import { makeCommaSeparatedString } from '../../lib/makeCommaSeparatedString'
 
 //reinstating, not in lib/firebase cause fs being stinky
@@ -67,6 +68,7 @@ const router = useRouter();
   const [authorData, setAuthorData] = useState(makeCommaSeparatedString(content.author, true));
   const [tagsData, setTagsData] = useState(makeCommaSeparatedString(content.tags, true));
   const [uploadData, setUploadData] = useState("")
+  const [blurbLen, setBlurbLen] = useState(0)
   // console.log(content)
   // const handleTextChange = event => {
   //   // 👇️ access textarea value
@@ -85,6 +87,7 @@ const router = useRouter();
 	// Use remark to convert markdown into HTML string
     try {
       const dats = parseISO(matterResult.data.date)
+      setBlurbLen(matterResult.data.blurb.length);
       format(dats, 'LLLL d, yyyy');
       setDateData(matterResult.data.date);
       setTitleData(matterResult.data.title);
@@ -100,7 +103,11 @@ const router = useRouter();
       if (!checkCategory(matterResult.data.tags)) {
         throw "Invalid Category";
       }
+      if (!checkBlurb(matterResult.data.blurb)) {
+        throw "Invalid Blurb. Max length 200 chars, current length: " + matterResult.data.blurb.length + ' chars';
+      }
       setTagsData(matterResult.data.tags);
+      
     }
     catch (e) {
       setErrorData("Something's wrong with the way you formatted the title or author or date or text or categories...check the instruction docs again...or try to read the error statement below \n" + e);
@@ -134,7 +141,8 @@ const router = useRouter();
       date: matterResult.data.date,
       author: matterResult.data.author,
       title: matterResult.data.title,
-      tags: matterResult.data.tags
+      tags: matterResult.data.tags,
+      blurb: matterResult.data.blurb
       });
     var file = new Blob([formData], { type: "text/plain" });
     const uploadTask = uploadBytesResumable(markdownRef, file);
@@ -200,6 +208,7 @@ const router = useRouter();
           </Link>
         </div>
         <textarea type="text" id="updateText" value={formData} onChange = {async () => await update()}/> 
+        <div>The blurb is currently {blurbLen} characters long.</div>
         <div className="text-red-500">{errorData}</div>
         <br></br>
         <div><i>If you wanna reset all your changes to the original version cause you really messed up, just reload the page</i></div>

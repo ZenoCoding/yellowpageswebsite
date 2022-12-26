@@ -50,7 +50,7 @@ export default function Navbar() {
             </div>
             <div className="hidden lg:flex lg:min-w-0 lg:flex-1 lg:mb-4 lg:justify-center lg:gap-x-12">
               {navigation.map((item) => (
-                <a key={item.name} href={item.href} className="text-2xl font-semibold text-gray-900 hover:text-gray-500 ">
+                <a key={item.name} href={item.href} className="lg:text-xl xl:text-2xl font-semibold text-gray-900 hover:text-gray-500 ">
                   {item.name}
                 </a>
               ))}

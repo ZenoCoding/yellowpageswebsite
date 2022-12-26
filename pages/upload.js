@@ -12,6 +12,9 @@ import { useReducer, useState } from 'react'
 import html from 'remark-html';
 import Link from 'next/link'
 import { parseISO, format } from 'date-fns'
+import { checkCategory } from '../lib/checkCategory'
+import { checkBlurb } from '../lib/checkBlurb'
+import { makeCommaSeparatedString } from '../lib/makeCommaSeparatedString'
 
 // var user_id = null;
 
@@ -46,22 +49,6 @@ export default function Upload({ admins }) {
         </a>
   </Link> </div> )
   }
-  
-
-  const makeCommaSeparatedString = (arr, useOxfordComma) => {
-    if (arr == null || arr.length == 0) {
-        return ""
-    }
-    const listStart = arr.slice(0, -1).join(', ')
-    const listEnd = arr.slice(-1)
-    const conjunction = arr.length <= 1 
-      ? '' 
-      : useOxfordComma && arr.length > 2 
-        ? ', and ' 
-        : ' and '
-  
-    return [listStart, listEnd].join(conjunction)
-  }
 
 
   const [formData, setFormData] = useState(`---
@@ -69,6 +56,7 @@ title: "Placeholder Title"
 date: "1000-01-01"
 author: [""]
 tags: [""]
+blurb: ""
 ---
 `);
   const [htmlData, setHtmlData] = useState("");
@@ -77,6 +65,8 @@ tags: [""]
   const [errorData, setErrorData] = useState("");
   const [authorData, setAuthorData] = useState(makeCommaSeparatedString([""], true));
   const [uploadData, setUploadData] = useState("")
+  const [tagsData, setTagsData] = useState("")
+  const [blurbLen, setBlurbLen] = useState(0)
   // console.log(content)
   // const handleTextChange = event => {
   //   // 👇️ access textarea value
@@ -89,27 +79,40 @@ tags: [""]
     matterResult = matter(document.getElementById('updateText').value);
     }
     catch (e) {
-      setErrorData("Something's wrong with the way you formatted the title or author or date");
+      setErrorData("Something's wrong with the way you formatted the title or author or date or text or categories...check the instruction docs again...or try to read the error statement below \n" + e);
       return;
     }
 	// Use remark to convert markdown into HTML string
-    const processedContent = await remark()
-      .use(html)
-      .process(matterResult.content);
-    setTitleData(matterResult.data.title);
     try {
       const dats = parseISO(matterResult.data.date)
+      setBlurbLen(matterResult.data.blurb.length);
       format(dats, 'LLLL d, yyyy');
       setDateData(matterResult.data.date);
+      setTitleData(matterResult.data.title);
+      makeCommaSeparatedString(matterResult.data.author, true)
+      setAuthorData(makeCommaSeparatedString(matterResult.data.author, true))
+      const processedContent = await remark()
+      .use(html)
+      .process(matterResult.content);
+      const contentHtml = processedContent.toString();
+      setHtmlData(contentHtml);
+      // console.log(matterResult.data.tags);
+      // console.log(checkCategory(matterResult.data.tags));
+      if (!checkCategory(matterResult.data.tags)) {
+        throw "Invalid Category";
+      }
+      if (!checkBlurb(matterResult.data.blurb)) {
+        throw "Invalid Blurb. Max length 200 chars, current length: " + matterResult.data.blurb.length + ' chars';
+      }
+      setTagsData(matterResult.data.tags);
     }
     catch (e) {
-      setErrorData("Something's wrong with the way you formatted the title or author or date");
+      setErrorData("Something's wrong with the way you formatted the title or author or date or text or categories...check the instruction docs again...or try to read the error statement below \n" + e);
       return;
       // console.log(e)
     }
-    setAuthorData(makeCommaSeparatedString(matterResult.data.author, true))
-    const contentHtml = processedContent.toString();
-    setHtmlData(contentHtml);
+
+    
     setErrorData("");
     // console.log(event.target.value);
   }
@@ -141,6 +144,7 @@ tags: [""]
       author: matterResult.data.author,
       title: matterResult.data.title,
       tags: matterResult.data.tags,
+      blurb: matterResult.data.blurb,
       path
       });
     var file = new Blob([formData], { type: "text/plain" });
@@ -200,7 +204,8 @@ tags: [""]
       <div>Here are some basic instructions: <a href="https://docs.google.com/document/d/1_lNHBxtpaBa1JRqrbapmCj_L_k-yfSsTSkgGp_1pnL0/edit?usp=sharing">Google Docs Link</a></div>
 
       <textarea type="text" id="updateText" value={formData} onChange = {async () => await update()}/> 
-      {errorData}
+      <div>The blurb is currently {blurbLen} characters long.</div>
+      <div className="text-red-500">{errorData}</div>
       <div onClick={async () => await upload()}>If you wanna upload this article, click this - <button>Submit</button></div>
       <div className="font-bold italic">{uploadData}</div>
       <br></br>
