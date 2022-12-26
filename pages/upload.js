@@ -195,6 +195,14 @@ blurb: ""
 
   return (
     <div className="bg-white">
+      <style jsx global>{`
+        a {
+          color: rgb(59 130 246);
+        }
+        a:hover {
+          text-decoration: underline;
+        }
+      `}</style>
       <div className="m-auto max-w-2xl my-10">
       <div><div>Wow! What an ugly upload page! Maybe I'll make it look better some other day. <br/>
       <Link legacyBehavior href="/">

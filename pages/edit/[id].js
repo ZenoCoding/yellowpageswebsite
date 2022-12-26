@@ -193,6 +193,14 @@ const router = useRouter();
   return (
         
       <div className="m-auto max-w-2xl my-10  px-5">
+        <style jsx global>{`
+        a {
+          color: rgb(59 130 246);
+        }
+        a:hover {
+          text-decoration: underline;
+        }
+      `}</style>
         <h1 className = "text-4xl mb-1">{titleData}</h1>
         <div className="text-gray-500">
           <Date dateString={dateData} />
@@ -206,6 +214,7 @@ const router = useRouter();
           <Link href="/">
             <a>← Back</a>
           </Link>
+          
         </div>
         <textarea type="text" id="updateText" value={formData} onChange = {async () => await update()}/> 
         <div>The blurb is currently {blurbLen} characters long.</div>

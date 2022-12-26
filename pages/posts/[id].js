@@ -7,6 +7,14 @@ export default function Post({ content }) {
   const authorData = makeCommaSeparatedString(content.author, true);
   return (
       <div className="m-auto px-5 max-w-2xl my-10">
+        <style jsx global>{`
+        a {
+          color: rgb(59 130 246);
+        }
+        a:hover {
+          text-decoration: underline;
+        }
+      `}</style>
         <h1 className = "text-4xl mb-1">{content.title}</h1>
         <div className="text-gray-500">
           <Date dateString={content.date} />
