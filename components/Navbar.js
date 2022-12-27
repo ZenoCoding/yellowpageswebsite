@@ -45,7 +45,7 @@ export default function Navbar() {
             </div>
               <div className="flex lg:hidden pt-1 px-2 justify-center h-16" style={{width: '100%', height: '100%', position: 'relative'}}>
                     <a href="/">
-                    <img src='/images/yellowPages5.png' width="2672px" height="332px" className = "mx-auto" style={{height: "100%", width: "100%", objectFit: "contain"}}/>
+                    <img src='/images/yellowPages5.png' width="2672px" height="332px" className = "mx-auto hover:opacity-60" style={{height: "100%", width: "100%", objectFit: "contain"}}/>
                     </a> 
             </div>
             <div className="hidden lg:flex lg:min-w-0 lg:flex-1 lg:mb-4 lg:justify-center lg:gap-x-12">
@@ -72,7 +72,7 @@ export default function Navbar() {
                 </div>
                 <div className="flex lg:hidden pt-1 px-2 justify-center max-h-full" style={{width: '100%', height: '100%', position: 'relative'}}>
                     <a href="/">
-                    <img src='/images/yellowPages5.png' width="2672px" height="332px" className = "mx-auto" style={{height: "100%", width: "100%", objectFit: "contain"}}/>
+                    <img src='/images/yellowPages5.png' width="2672px" height="332px" className = "mx-auto hover:opacity-60" style={{height: "100%", width: "100%", objectFit: "contain"}}/>
                     </a> 
             </div>
                 

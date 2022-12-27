@@ -82,6 +82,13 @@ ul {
 
 .rotate{
   animation: spinss 4s infinite;
+  position: absolute;
+  top:50%;
+  left:50%;
+  width:3.5rem; 
+  height:3.5rem; 
+  margin-top:-1.75rem;
+  margin-left: -1.75rem;
 }
 
 
