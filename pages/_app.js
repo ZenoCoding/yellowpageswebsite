@@ -1,11 +1,13 @@
 import '../styles/global.css'
 import Router from "next/router";
+import React from 'react'
 // import initAuth from '../initAuth' // the module you created above
 
 // initAuth()
 import AuthUserProvider from "../firebase/useUser";
 import Loader from "../components/Loader";
 import { useEffect, useState } from "react"
+import Head from "next/head"
 export default function App({ Component, pageProps }) {
   // return <AuthUserProvider><Component {...pageProps} /> </AuthUserProvider>
   const [loading, setLoading] = useState(false);
@@ -29,6 +31,9 @@ export default function App({ Component, pageProps }) {
       }, []);
       return (
         <>
+        <Head>
+        <title>The Yellow Pages - The Student News Site of BASIS Independent Fremont</title>
+        </Head>
           {loading ? (
             <Loader/>
           ) : (
