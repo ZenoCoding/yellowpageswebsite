@@ -9,7 +9,7 @@ export default function Logo() {
         <div className="hidden lg:block pt-2 px-2 justify-center h-28 w-auto">
         
             <a href="/">
-            <img src='/images/yellowPages5.png' className = "hover:opacity-60 object-contain h-full w-full"/>
+            <img src='/images/yellowPages5.png' className = "hover:opacity-60 object-contain h-full w-auto mx-auto"/>
             </a> 
         </div>
         </div>
