@@ -210,11 +210,8 @@ const router = useRouter();
         </div>
         
         <div dangerouslySetInnerHTML={{ __html: htmlData}} />
-        <div className="hover:underline text-blue-500 mb-5">
-          <Link href="/">
-            <a>← Back</a>
-          </Link>
-          
+        <div className="hover:underline text-blue-500 cursor-pointer mb-5">
+            <a onClick={() => router.back()}>← Back</a>
         </div>
         <textarea type="text" id="updateText" value={formData} onChange = {async () => await update()}/> 
         <div>The blurb is currently {blurbLen} characters long.</div>

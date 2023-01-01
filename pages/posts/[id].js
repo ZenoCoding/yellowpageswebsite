@@ -2,10 +2,13 @@ import { getArticleContent, getAllArticleIds } from '../../lib/firebase'
 import Date from '../../components/date'
 import Link from "next/link"
 import { makeCommaSeparatedString } from '../../lib/makeCommaSeparatedString'
+import { useRouter } from 'next/router';
 
 export default function Post({ content }) {
   const authorData = makeCommaSeparatedString(content.author, true);
+  const router = useRouter();
   return (
+    
       <div className="m-auto px-5 max-w-2xl my-10">
         <style jsx global>{`
         a {
@@ -24,10 +27,8 @@ export default function Post({ content }) {
         </div>
         
         <div dangerouslySetInnerHTML={{ __html: content.contentHtml }} />
-        <div className="hover:underline text-blue-500 mb-5">
-          <Link href="/">
-            <a>← Back</a>
-          </Link>
+        <div className="hover:underline text-blue-500 mb-5 cursor-pointer ">
+          <a onClick={() => router.back()}>← Back</a>
         </div>
       </div>
   )

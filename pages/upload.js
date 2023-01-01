@@ -187,8 +187,16 @@ blurb: ""
       () => {
         // Upload completed successfully, now we can get the download URL
         getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-          setUploadData("Upload Successful! The article should be in the database now...theoretically...reload homepage or category page to check");
+          setUploadData("Upload Successful! Redirecting to submitted article page...in 5 seconds");
         });
+        function callback(){
+          return function(){
+            router.push('/posts/' + articleId);
+          }
+      }
+      setTimeout(callback(), 6000);
+        
+
       }
     );
   }
