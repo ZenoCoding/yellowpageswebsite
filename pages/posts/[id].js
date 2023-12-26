@@ -1,6 +1,5 @@
-import { getArticleContent, getAllArticleIds } from '../../lib/firebase'
+import { getArticleContent } from '../../lib/firebase'
 import Date from '../../components/date'
-import Link from "next/link"
 import { makeCommaSeparatedString } from '../../lib/makeCommaSeparatedString'
 import { useRouter } from 'next/router';
 
@@ -33,16 +32,6 @@ export default function Post({ content }) {
       </div>
   )
 }
-
-// export async function getStaticPaths() {
-//   console.log("getting paths...")
-//   const paths = await getAllArticleIds()
-//   console.log(paths)
-//   return {
-//     paths,
-//     fallback: false
-//   }
-// }
 
 export async function getServerSideProps({ params }) {
   const content = await getArticleContent(params.id)
