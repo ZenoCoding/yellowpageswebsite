@@ -1,12 +1,11 @@
 // pages/search.js
 import { getAllArticleData } from '../lib/firebase';
-import { CiSearch } from 'react-icons/ci';
 import Link from "next/link";
 import {makeCommaSeparatedString} from "../lib/makeCommaSeparatedString";
 import {format, parseISO} from "date-fns";
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import Navbar from "../components/Navbar";
+import ContentNavbar from "../components/ContentNavbar";
 
 export default function Search({ allArticleData }) {
     const [searchTerm, setSearchTerm] = useState('');
@@ -36,7 +35,7 @@ export default function Search({ allArticleData }) {
 
     return (
         <div className="bg-white">
-            <Navbar/>
+            <ContentNavbar/>
             {/* Search Header */}
             <div className="mx-auto max-w-xl px-4 sm:px-6 lg:max-w-7xl lg:px-8 py-4">
                 <h1 className="text-2xl font-bold text-gray-900">Search Results for: {searchTerm}</h1>

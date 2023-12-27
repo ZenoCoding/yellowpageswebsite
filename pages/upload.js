@@ -234,7 +234,7 @@ blurb: ""
                             <Date dateString={dateData}/>
                         </div>
                         <div className="text-gray-500 mb-4">
-                            By {authorData}
+                            {authorData}
                         </div>
 
                         <div dangerouslySetInnerHTML={{__html: htmlData}}/>

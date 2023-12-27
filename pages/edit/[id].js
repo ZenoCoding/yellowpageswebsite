@@ -15,6 +15,7 @@ import {format, parseISO} from 'date-fns'
 import {checkCategory} from '../../lib/checkCategory'
 import {checkBlurb} from '../../lib/checkBlurb'
 import {makeCommaSeparatedString} from '../../lib/makeCommaSeparatedString'
+import ContentNavbar from "../../components/ContentNavbar";
 
 //reinstating, not in lib/firebase cause fs being stinky
 const app = getApp()
@@ -177,8 +178,8 @@ export default function Post({content, admins}) {
 
 
     return (
-
         <div className="m-auto max-w-2xl my-10  px-5">
+            <ContentNavbar/>
             <style jsx global>{`
                 a {
                     color: rgb(59 130 246);
@@ -193,7 +194,7 @@ export default function Post({content, admins}) {
                 <Date dateString={dateData}/>
             </div>
             <div className="text-gray-500 mb-4">
-                By {authorData}
+                {authorData}
             </div>
 
             <div dangerouslySetInnerHTML={{__html: htmlData}}/>

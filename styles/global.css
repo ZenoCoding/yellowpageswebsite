@@ -14,6 +14,7 @@ h3 {
 
 p {
   @apply mb-3;
+  @apply text-lg;
 }
 
 textarea {
@@ -31,26 +32,25 @@ ul {
   break-inside: avoid;
 }
 
-@keyframes spins {
-  0% {
-    transform: rotateY(0deg); }
-  25% {
-    transform: rotateZ(0deg); }
-  50% {
-    transform: rotateY(180deg); }
-    75% {
-      transform: rotateZ(180deg); }
+@keyframes bounce {
+  0%, 60% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-20px);
+  }
 }
 
-.rotate{
-  animation: spins 4s infinite;
+.loading {
+  width: 50px;
+  height: 50px;
+  background-color: #3498db; /* You can choose any color */
+  animation: bounce 1.5s infinite;
   position: absolute;
-  top:50%;
-  left:50%;
-  width:3.5rem; 
-  height:3.5rem; 
-  margin-top:-1.75rem;
-  margin-left: -1.75rem;
+  top: 50%;
+  left: 50%;
+  margin-top: -25px;
+  margin-left: -25px;
 }
 
 
