@@ -58,12 +58,15 @@ export function SearchBar({ className, isIconOnly = true }) {
                                 }}
                                 transition={{duration: 0.2}}
                             >
-                                <a className={`text-black ${isActive ? "hidden" : "block"}`}>Search</a>
+                                <span className={`text-black ${isActive ? "hidden" : "block"}`}>Search</span>
                             </motion.div>}
                     </button>
                     <motion.div
                         initial={false}
-                        animate={{width: isActive ? 300 : 0}}
+                        animate={{
+                            width: isActive ? 250 : 0,
+                            padding: isActive ? "0" : "250",
+                        }}
                         transition={{duration: 0.3}}
                         className="overflow-hidden flex items-center"
                     >

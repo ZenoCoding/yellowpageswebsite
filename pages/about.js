@@ -14,9 +14,7 @@ export default function About() {
                         like to be part of a newspaper, but they also hone their writing skills, allowing them to grow
                         in and outside of the classroom. </p>
                     <div className="px-2 justify-center h-72">
-                        {/* <a href="/"> */}
                         <img src='/images/yellowpages.png' className="object-contain h-full w-full"/>
-                        {/* </a>  */}
                     </div>
                     <br></br>
                 </div>

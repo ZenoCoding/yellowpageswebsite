@@ -48,14 +48,14 @@ export default function Navbar() {
                                 className={`lg:text-lg xl:text-xl font-semibold ${router.asPath === item.href ? 'underline text-yellow-500' : 'text-gray-900'} hover:text-gray-500 lg:px-1 xl:px-2`}
                             >
                                 <Link href={item.href}>
-                                    <a>
+                                    <span>
                                       <span className="xl:hidden">
                                         {item.name === 'Humans of BASIS' ? 'HoB' : item.name === 'About Us' ? 'About' : item.name}
                                       </span>
                                       <span className="hidden xl:inline">
                                         {item.name}
                                       </span>
-                                    </a>
+                                    </span>
                                 </Link>
                             </div>
                         ))}
@@ -86,10 +86,8 @@ export default function Navbar() {
                             <div className="divide-y divide-gray-500">
                                 <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
                                     {navigation.map((item) => (
-                                        <Link key={item.name} href={item.href}>
-                                            <a className="text-xl hover:bg-gray-50 block px-3 py-2 rounded-md font-medium">
-                                                {item.name}
-                                            </a>
+                                        <Link key={item.name} href={item.href} className="text-xl hover:bg-gray-50 block px-3 py-2 rounded-md font-medium">
+                                            {item.name}
                                         </Link>
                                     ))}
                                     <SearchBar isIconOnly={false} className="-mt-2"/>

@@ -45,11 +45,13 @@ export default function Post({content, admins}) {
         });
     };
     if (!inc) {
-        return (<div>Sry you're not authorized.<Link legacyBehavior href="/">
-            <a onClick={(e) => handleClick(e)}>
-                Sign out
-            </a>
-        </Link></div>)
+        return (
+            <div>Sorry, you're not authorized.
+                <Link legacyBehavior href="/" onClick={(e) => handleClick(e)}>
+                    Sign out
+                </Link>
+            </div>
+        )
     }
 
 

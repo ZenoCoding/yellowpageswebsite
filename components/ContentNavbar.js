@@ -45,10 +45,9 @@ export default function ContentNavbar() {
                         </div>
                         <div className="hidden lg:flex lg:items-center lg:space-x-8">
                             {navigation.map((item) => (
-                                <Link key={item.name} href={item.href}>
-                                    <a className="text-gray-900 hover:text-gray-700 px-3 py-2 rounded-lg text-sm font-medium">
-                                        {item.name}
-                                    </a>
+                                <Link key={item.name} href={item.href}
+                                      className="text-gray-900 hover:text-gray-700 px-3 py-2 rounded-lg text-sm font-medium">
+                                    {item.name}
                                 </Link>
                             ))}
                         </div>
@@ -64,10 +63,9 @@ export default function ContentNavbar() {
                     <div className="lg:hidden">
                         <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
                             {navigation.map((item) => (
-                                <Link key={item.name} href={item.href}>
-                                    <a className="text-xl hover:bg-gray-50 block px-3 py-2 rounded-md font-medium text-black">
-                                        {item.name}
-                                    </a>
+                                <Link key={item.name} href={item.href}
+                                      className="text-xl hover:bg-gray-50 block px-3 py-2 rounded-md font-medium text-black">
+                                    {item.name}
                                 </Link>
                             ))}
                             <SearchBar isIconOnly={false} className="-mt-2"/>

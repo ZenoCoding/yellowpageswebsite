@@ -55,11 +55,11 @@ export default function Search({ allArticleData }) {
                                     {format(parseISO(date), 'LLLL d, yyyy')}
                                 </time>
                                 <Link href={`/posts/${id}`}>
-                                    <a className="article-link">
+                                    <div className="article-link">
                                         <h5 className="article-title text-xl font-semibold hover:underline">{title}</h5>
                                         <p className="article-meta text-sm text-gray-500">By {makeCommaSeparatedString(author)}</p>
                                         <p className="article-blurb mt-2 text-gray-700">{blurb}</p>
-                                    </a>
+                                    </div>
                                 </Link>
                             </div>
                         </div>

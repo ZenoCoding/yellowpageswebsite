@@ -43,11 +43,13 @@ export default function Upload({admins}) {
         });
     };
     if (!inc) {
-        return (<div>Sry you're not authorized.<Link legacyBehavior href="/">
-            <a className="border-2" onClick={(e) => handleClick(e)}>
-                Sign out
-            </a>
-        </Link></div>)
+        return (
+            <div>Sry you're not authorized.
+                <Link legacyBehavior href="/" className="border-2" onClick={(e) => handleClick(e)}>
+                    Sign out
+                </Link>
+            </div>
+        )
     }
 
 
@@ -206,10 +208,8 @@ blurb: ""
             <div className="m-auto max-w-2xl my-10">
                 <div>
                     <div>Wow! What an ugly upload page! Maybe I'll make it look better some other day. <br/>
-                        <Link legacyBehavior href="/">
-                            <a className="border-2" onClick={(e) => handleClick(e)}>
-                                Sign out
-                            </a>
+                        <Link legacyBehavior href="/" className="border-2" onClick={(e) => handleClick(e)}>
+                            Sign out
                         </Link>
                     </div>
                     <br/>
