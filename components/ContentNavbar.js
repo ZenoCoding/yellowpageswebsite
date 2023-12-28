@@ -65,7 +65,7 @@ export default function ContentNavbar() {
                         <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
                             {navigation.map((item) => (
                                 <Link key={item.name} href={item.href}>
-                                    <a className="text-gray-700 hover:bg-gray-50 block px-3 py-2 rounded-lg text-base font-medium">
+                                    <a className="text-xl hover:bg-gray-50 block px-3 py-2 rounded-md font-medium text-black">
                                         {item.name}
                                     </a>
                                 </Link>

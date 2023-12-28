@@ -63,14 +63,14 @@ export function SearchBar({ className, isIconOnly = true }) {
                     </button>
                     <motion.div
                         initial={false}
-                        animate={{width: isActive ? 200 : 0}}
-                        transition={{duration: 0.2}}
+                        animate={{width: isActive ? 300 : 0}}
+                        transition={{duration: 0.3}}
                         className="overflow-hidden flex items-center"
                     >
                         <form onSubmit={handleSearchSubmit} className={`border-b-2 border-black`}>
                             <input
                                 type="text"
-                                placeholder="Search..."
+                                placeholder="Search for anything..."
                                 value={searchTerm}
                                 onChange={handleSearchChange}
                                 className={`w-full border-none bg-transparent py-2 text-gray-700 focus:outline-none transition-all duration-200 ease-in-out `}
