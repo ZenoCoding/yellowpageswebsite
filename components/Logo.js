@@ -1,14 +1,14 @@
 import Link from "next/link"
 export default function Logo({ className }) {
     return (
-        <div className={`${className} pt-7 mx-10 lg:mx-20justify-center h-28`}>
-            <Link href="/">
+        <div className={`${className} px-4 flex items-center justify-center h-28`}>
+            <Link href="/" className="w-full flex justify-center"> {/* Ensures the link itself is also centered */}
                 <img src='/images/yellowPages5.png'
-                     className="object-contain h-auto mx-auto lg:w-3/4 xl:w-3/5"
+                     className="object-contain h-auto max-w-full md:w-10/12 lg:w-3/4 xl:w-3/5"
                      alt="Yellow Pages Logo"/>
             </Link>
         </div>
-    )
+    );
 }
 
 

@@ -6,6 +6,7 @@ import React, {useEffect, useState} from 'react'
 import AuthUserProvider from "../firebase/useUser";
 import Loader from "../components/Loader";
 import Head from "next/head"
+import '../styles/global.css';
 
 export default function App({Component, pageProps}) {
     // return <AuthUserProvider><Component {...pageProps} /> </AuthUserProvider>

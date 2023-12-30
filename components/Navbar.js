@@ -1,11 +1,10 @@
-import {useState} from 'react'
-import {Dialog} from '@headlessui/react'
-import {Bars3Icon, XMarkIcon} from '@heroicons/react/24/outline'
-import Logo from './Logo.js'
-import Link from "next/link"
-import {useRouter} from 'next/router';
-import {SearchBar} from "./SearchBar";
-// import MobileLogo from './MobileLogo.js'
+import { useState } from 'react';
+import { Dialog } from '@headlessui/react';
+import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
+import Logo from './Logo.js';
+import Link from "next/link";
+import { useRouter } from 'next/router';
+import { SearchBar } from "./SearchBar";
 
 const navigation = [
     {name: 'Local', href: '/category/local'},
@@ -16,88 +15,59 @@ const navigation = [
     {name: 'Sports', href: '/category/sports'},
     {name: 'Humans of BASIS', href: '/category/hob'},
     {name: 'About Us', href: '/about'}
-]
-
+];
 
 export default function Navbar() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const router = useRouter();
 
     return (
-        <div className="px-6 pt-6 lg:px-8">
-            <Logo className="hidden lg:block"/>
-            <div>
-                <nav className="flex h-16 items-center justify-center space-x-1" aria-label="Global">
-                    <div className="flex lg:hidden">
-                        <button
-                            type="button"
-                            className="-m-2.5 inline-flex items-center justify-center rounded-md p-2.5 text-gray-700"
-                            onClick={() => setMobileMenuOpen(true)}
-                        >
-                            <span className="sr-only">Open Navigation Menu</span>
-                            <Bars3Icon className="h-6 w-6" aria-hidden="true"/>
-                        </button>
-                    </div>
-                    <Logo className="flex lg:hidden px-2 justify-center h-16"
-                          style={{width: '100%', height: '100%', position: 'relative'}}/>
-                    <div
-                        className="hidden xl:mt-4 lg:flex lg:min-w-0 lg:flex-1 lg:mb-4 lg:justify-center lg:items-center lg:gap-x-6 xl:gap-x-10 px-20 xl:pt-5">
-                        {navigation.map((item) => (
-                            <div
-                                key={item.name}
-                                className={`lg:text-lg xl:text-xl font-semibold ${router.asPath === item.href ? 'underline text-yellow-500' : 'text-gray-900'} hover:text-gray-500 lg:px-1 xl:px-2`}
-                            >
-                                <Link href={item.href}>
-                                    <span>
-                                      <span className="xl:hidden">
-                                        {item.name === 'Humans of BASIS' ? 'HoB' : item.name === 'About Us' ? 'About' : item.name}
-                                      </span>
-                                      <span className="hidden xl:inline">
-                                        {item.name}
-                                      </span>
-                                    </span>
-                                </Link>
-                            </div>
-                        ))}
-                        {/* Search Bar */}
-                        <SearchBar className="hidden lg:block"/>
-                    </div>
-                </nav>
+        <div className="lg:pt-10 md:pt-5 px-4 md:px-8">
+            <div className="flex flex-col items-center w-full lg:items-start">
+                <div className="flex w-full justify-between lg:justify-center items-center">
+                    <button
+                        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                        className="p-2 rounded-md text-gray-700 lg:hidden"
+                        aria-label="Open menu"
+                    >
+                        <Bars3Icon className="h-6 w-6" />
+                    </button>
+                    <Logo/>
+                    <div className="hidden lg:block" /> {/* Placeholder to keep logo centered */}
+                </div>
+                <div className="hidden lg:flex justify-center items-center space-x-6 w-full">
+                    {navigation.map((item) => (
+                        <Link key={item.name} href={item.href} className={`text-lg font-semibold ${router.asPath === item.href ? 'underline text-yellow-500' : 'text-gray-900'} hover:text-gray-500`}>
+                            {item.name}
+                        </Link>
+                    ))}
+                    <SearchBar className="hover:text-gray-500" isIconOnly={false}/>
+                </div>
 
-                <Dialog as="div" open={mobileMenuOpen} onClose={setMobileMenuOpen}>
-                    <Dialog.Panel focus="true"
-                                  className="fixed inset-0 z-10 overflow-y-auto bg-white px-6 py-6 lg:hidden">
-                        <div className="flex h-16 items-center justify-center space-x-1">
-                            <div className="flex">
-                                <button
-                                    type="button"
-                                    className="-m-2.5 inline-flex items-center justify-center rounded-md p-2.5 text-gray-700"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                >
-                                    <span className="sr-only">Close menu</span>
-                                    <XMarkIcon className="h-6 w-6" aria-hidden="true"/>
-                                </button>
-                            </div>
-                            <Logo className="flex lg:hidden pt-1 px-2 justify-center h-16"
-                                  style={{width: '100%', height: '100%', position: 'relative'}}/>
-
-                        </div>
-                        <div className="mt-5 flow-root">
-                            <div className="divide-y divide-gray-500">
-                                <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-                                    {navigation.map((item) => (
-                                        <Link key={item.name} href={item.href} className="text-xl hover:bg-gray-50 block px-3 py-2 rounded-md font-medium">
-                                            {item.name}
-                                        </Link>
-                                    ))}
-                                    <SearchBar isIconOnly={false} className="-mt-2"/>
-                                </div>
-                            </div>
-                        </div>
-                    </Dialog.Panel>
-                </Dialog>
             </div>
+            <Dialog as="div" open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)}>
+                <Dialog.Panel className="fixed inset-0 z-10 overflow-y-auto bg-white p-6">
+                    <div className="flex items-center justify-between">
+                        <button
+                            onClick={() => setMobileMenuOpen(false)}
+                            className="p-2 rounded-md text-gray-700"
+                            aria-label="Close menu"
+                        >
+                            <XMarkIcon className="h-6 w-6"/>
+                        </button>
+                        <Logo/>
+                    </div>
+                    <div className="mt-5">
+                        {navigation.map((item) => (
+                            <Link key={item.name} href={item.href}
+                                  className="text-xl hover:bg-gray-50 block px-3 py-2 rounded-md font-medium">
+                                {item.name}
+                            </Link>
+                        ))}
+                        <SearchBar isIconOnly={false} />
+                    </div>
+                </Dialog.Panel>
+            </Dialog>
         </div>
     );
 }
-

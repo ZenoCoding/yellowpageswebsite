@@ -1,5 +1,4 @@
 import {getAdmins, getArticleContent} from '../../lib/firebase'
-import Date from '../../components/date'
 import {getApp} from "firebase/app"
 import {doc, getDoc, getFirestore, updateDoc} from "firebase/firestore"
 import {getDownloadURL, getStorage, ref, uploadBytesResumable} from "firebase/storage";
@@ -12,8 +11,6 @@ import {useState} from 'react'
 import html from 'remark-html';
 import Link from 'next/link'
 import {format, parseISO} from 'date-fns'
-import {checkCategory} from '../../lib/checkCategory'
-import {checkBlurb} from '../../lib/checkBlurb'
 import {makeCommaSeparatedString} from '../../lib/makeCommaSeparatedString'
 import ContentNavbar from "../../components/ContentNavbar";
 
@@ -23,17 +20,40 @@ const db = getFirestore(app)
 const storage = getStorage(app)
 
 
-export default function Post({content, admins}) {
+export default function Post({articleData, content, admins}) {
     //then get the text field changes from here
     const auth = getAuth();
     const {user} = useUser();
     const router = useRouter();
     const articleId = router.query.id
+
+    // Define states for form fields
+    const [formData, setFormData] = useState({
+        title: articleData.title,
+        author: makeCommaSeparatedString(articleData.author),
+        date: articleData.date,
+        blurb: articleData.blurb,
+        tags: makeCommaSeparatedString(articleData.tags),
+        imageUrl: articleData.imageUrl || '',
+        size: articleData.size || 'normal',
+        markdown: content.markdown,
+    });
+
+    const [uploadData, setUploadData] = useState("");
+    const [errorData, setErrorData] = useState("");
+    const [isUploading, setIsUploading] = useState(false);
+
+    // Form input change handlers
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData((prevFormData) => ({
+            ...prevFormData,
+            [name]: value,
+        }));
+    };
+
     if (user == null) {
         return (<div>You're not logged in my man</div>)
-    }
-    if (user == undefined) {
-        return <Loading/>
     }
     // console.log(admins);
     const inc = Array.from(admins).includes(user.id);
@@ -47,184 +67,246 @@ export default function Post({content, admins}) {
     if (!inc) {
         return (
             <div>Sorry, you're not authorized.
-                <Link legacyBehavior href="/" onClick={(e) => handleClick(e)}>
+                <Link href="/" onClick={(e) => handleClick(e)}>
                     Sign out
                 </Link>
             </div>
         )
     }
 
-
-    const [formData, setFormData] = useState(content.markdown);
-    const [htmlData, setHtmlData] = useState(content.contentHtml);
-    const [titleData, setTitleData] = useState(content.title);
-    const [dateData, setDateData] = useState(content.date);
-    const [errorData, setErrorData] = useState("");
-    const [authorData, setAuthorData] = useState(makeCommaSeparatedString(content.author, true));
-    const [tagsData, setTagsData] = useState(makeCommaSeparatedString(content.tags, true));
-    const [uploadData, setUploadData] = useState("")
-    const [blurbLen, setBlurbLen] = useState(0)
-    // console.log(content)
-    // const handleTextChange = event => {
-    //   // 👇️ access textarea value
-    //   setFormData(event.target.value);
-    // };
-    async function update() {
-        setFormData(document.getElementById('updateText').value);
-        var matterResult = null;
+    // Markdown to HTML conversion
+    const convertMarkdownToHtml = async (markdown) => {
         try {
-            matterResult = matter(document.getElementById('updateText').value);
-        } catch (e) {
-            setErrorData("Something's wrong with the way you formatted the title or author or date or text or categories...check the instruction docs again...or try to read the error statement below \n" + e);
+            const processedContent = await remark().use(html).process(markdown);
+            return processedContent.toString();
+        } catch (error) {
+            throw new Error('Markdown to HTML conversion failed: ' + error.message);
+        }
+    };
+
+    // Form submission handler
+    // Form submission handler
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setErrorData('');
+        setIsUploading(true);
+
+        // Perform validation checks here
+        if (!formData.title || !formData.author || !formData.date) {
+            setErrorData('Please fill out all required fields.');
+            setIsUploading(false);
             return;
         }
-        // Use remark to convert markdown into HTML string
+
+        // Convert markdown to HTML and validate
+        let contentHtml;
         try {
-            const dats = parseISO(matterResult.data.date)
-            setBlurbLen(matterResult.data.blurb.length);
-            format(dats, 'LLLL d, yyyy');
-            setDateData(matterResult.data.date);
-            setTitleData(matterResult.data.title);
-            makeCommaSeparatedString(matterResult.data.author, true)
-            setAuthorData(makeCommaSeparatedString(matterResult.data.author, true))
-            const processedContent = await remark()
-                .use(html)
-                .process(matterResult.content);
-            const contentHtml = processedContent.toString();
-            setHtmlData(contentHtml);
-            // console.log(matterResult.data.tags);
-            // console.log(checkCategory(matterResult.data.tags));
-            if (!checkCategory(matterResult.data.tags)) {
-                throw "Invalid Category";
-            }
-            if (!checkBlurb(matterResult.data.blurb)) {
-                throw "Invalid Blurb. Max length 200 chars, current length: " + matterResult.data.blurb.length + ' chars';
-            }
-            setTagsData(matterResult.data.tags);
-
-        } catch (e) {
-            setErrorData("Something's wrong with the way you formatted the title or author or date or text or categories...check the instruction docs again...or try to read the error statement below \n" + e);
-            return;
-            // console.log(e)
-        }
-
-
-        setErrorData("");
-        // console.log(event.target.value);
-    }
-
-
-    async function upload() {
-        // uploadMarkdown(formData, articleId);
-        if (errorData !== "") {
-            setUploadData("There's unresolved errors bro.")
+            contentHtml = await convertMarkdownToHtml(formData.markdown);
+        } catch (error) {
+            setErrorData(error.message);
+            setIsUploading(false);
             return;
         }
-        console.log(articleId);
-        const article = await getDoc(doc(db, "articles", articleId.toString()));
-        const cont = article.data();
-        const markdownRef = ref(storage, cont.path);
 
-        const matterResult = matter(formData);
+        // Create a Blob from the markdown content
+        const file = new Blob([formData.markdown], {type: "text/plain"});
+        const markdownRef = ref(storage, `articles/${articleId}.md`); // Adjust the path as needed
 
-
-        await updateDoc(doc(db, "articles", articleId), {
-            date: matterResult.data.date,
-            author: matterResult.data.author,
-            title: matterResult.data.title,
-            tags: matterResult.data.tags,
-            blurb: matterResult.data.blurb
-        });
-        var file = new Blob([formData], {type: "text/plain"});
+        // Upload the Blob to Firebase Storage
         const uploadTask = uploadBytesResumable(markdownRef, file);
+
         uploadTask.on('state_changed',
             (snapshot) => {
-                // Get task progress, including the number of bytes uploaded and the total number of bytes to be uploaded
+                // Handle state changes, such as progress, pause, and resume
                 const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
                 setUploadData('Upload is ' + progress + '% done');
-                switch (snapshot.state) {
-                    case 'paused':
-                        setUploadData('Upload is paused');
-                        break;
-                    case 'running':
-                        setUploadData('Uploading...');
-                        break;
-                }
+                // ...
             },
             (error) => {
-                // A full list of error codes is available at
-                // https://firebase.google.com/docs/storage/web/handle-errors
-                switch (error.code) {
-                    case 'storage/unauthorized':
-                        // User doesn't have permission to access the object
-                        break;
-                    case 'storage/canceled':
-                        // User canceled the upload
-                        break;
-
-                    // ...
-
-                    case 'storage/unknown':
-                        // Unknown error occurred, inspect error.serverResponse
-                        break;
-                }
+                // Handle unsuccessful uploads
+                setErrorData(error.message);
+                setIsUploading(false);
             },
-            () => {
-                // Upload completed successfully, now we can get the download URL
-                getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-                    setUploadData("Upload Successful! Article page should now display your edits.");
-                });
+            async () => {
+                // Handle successful uploads on complete
+                try {
+                    // Get the download URL for the uploaded markdown content
+                    const markdownDownloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                    const dateObject = parseISO(formData.date)
+
+                    // Update Firestore document with the new metadata and content references
+                    await updateDoc(doc(db, "articles", articleId), {
+                        title: formData.title,
+                        author: formData.author.split(',').map((a) => a.trim()),
+                        date: formData.date,
+                        blurb: formData.blurb,
+                        tags: formData.tags.split(',').map((tag) => tag.trim()),
+                        imageUrl: formData.imageUrl,
+                        size: formData.size,
+                        path: `articles/${articleId}.md`,
+                    });
+
+                    setUploadData("Upload Successful! Redirecting to the article page...");
+                    setTimeout(() => router.push(`/posts/${articleId}`), 5000);
+                } catch (error) {
+                    setErrorData(error.message);
+                    setIsUploading(false);
+                }
             }
         );
-    }
+    };
 
-
+    // JSX for the form within the Post component
     return (
-        <div className="m-auto max-w-2xl my-10  px-5">
-            <ContentNavbar/>
-            <style jsx global>{`
-                a {
-                    color: rgb(59 130 246);
-                }
+        <div className="m-auto max-w-2xl my-10 px-5">
+            <ContentNavbar />
+            <form onSubmit={handleSubmit} className="space-y-6">
+                <div>
+                    <label htmlFor="title" className="block text-sm font-medium text-gray-700">
+                        Title
+                    </label>
+                    <input
+                        id="title"
+                        name="title"
+                        type="text"
+                        required
+                        value={formData.title}
+                        onChange={handleChange}
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm"
+                    />
+                </div>
 
-                a:hover {
-                    text-decoration: underline;
-                }
-            `}</style>
-            <h1 className="text-4xl mb-1">{titleData}</h1>
-            <div className="text-gray-500">
-                <Date dateString={dateData}/>
-            </div>
-            <div className="text-gray-500 mb-4">
-                {authorData}
-            </div>
+                <div>
+                    <label htmlFor="author" className="block text-sm font-medium text-gray-700">
+                        Author(s)
+                    </label>
+                    <input
+                        id="author"
+                        name="author"
+                        type="text"
+                        required
+                        value={formData.author}
+                        onChange={handleChange}
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm"
+                    />
+                </div>
 
-            <div dangerouslySetInnerHTML={{__html: htmlData}}/>
-            <div className="hover:underline text-blue-500 cursor-pointer mb-5">
-                <a onClick={() => router.back()}>← Back</a>
-            </div>
-            <textarea type="text" id="updateText" value={formData} onChange={async () => await update()}/>
-            <div>The blurb is currently {blurbLen} characters long.</div>
-            <div className="text-red-500">{errorData}</div>
-            <br></br>
-            <div><i>If you wanna reset all your changes to the original version cause you really messed up, just reload
-                the page</i></div>
-            <div onClick={async () => await upload()}>If you wanna submit your changes and update the article (<b>MAKE
-                SURE TO NOT SUBMIT IF THERE ARE ERRORS!</b>), click this - <button>Submit</button></div>
-            <div className="font-bold italic">{uploadData}</div>
+                <div>
+                    <label htmlFor="date" className="block text-sm font-medium text-gray-700">
+                        Date
+                    </label>
+                    <input
+                        id="date"
+                        name="date"
+                        type="date"
+                        required
+                        value={formData.date}
+                        onChange={handleChange}
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm"
+                    />
+                </div>
+
+                <div>
+                    <label htmlFor="blurb" className="block text-sm font-medium text-gray-700">
+                        Blurb
+                    </label>
+                    <textarea
+                        id="blurb"
+                        name="blurb"
+                        required
+                        value={formData.blurb}
+                        onChange={handleChange}
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm"
+                    />
+                </div>
+
+                <div>
+                    <label htmlFor="tags" className="block text-sm font-medium text-gray-700">
+                        Tags
+                    </label>
+                    <input
+                        id="tags"
+                        name="tags"
+                        type="text"
+                        required
+                        value={formData.tags}
+                        onChange={handleChange}
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm"
+                    />
+                </div>
+
+                <div>
+                    <label htmlFor="imageUrl" className="block text-sm font-medium text-gray-700">
+                        Image URL
+                    </label>
+                    <input
+                        id="imageUrl"
+                        name="imageUrl"
+                        type="text"
+                        value={formData.imageUrl}
+                        onChange={handleChange}
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm"
+                    />
+                </div>
+
+                <div>
+                    <label htmlFor="size" className="block text-sm font-medium text-gray-700">
+                        Article Size
+                    </label>
+                    <select
+                        id="size"
+                        name="size"
+                        value={formData.size}
+                        onChange={handleChange}
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm"
+                    >
+                        <option value="normal">Normal</option>
+                        <option value="medium">Medium</option>
+                        <option value="large">Large</option>
+                        <option value="small">Small</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label htmlFor="markdown" className="block text-sm font-medium text-gray-700">
+                        Markdown
+                    </label>
+                    <textarea
+                        id="markdown"
+                        name="markdown"
+                        required
+                        value={formData.markdown}
+                        onChange={handleChange}
+                        rows={10}
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm"
+                    />
+                </div>
+
+                <div className="flex items-center justify-between">
+                    <button
+                        type="submit"
+                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        disabled={isUploading}
+                    >
+                        {isUploading ? 'Updating...' : 'Update Article'}
+                    </button>
+                    {errorData && <p className="text-red-500">{errorData}</p>}
+                    {uploadData && <p className="text-green-500">{uploadData}</p>}
+                </div>
+            </form>
         </div>
-
-    )
+    );
 }
 
 export async function getServerSideProps({params}) {
+    const articleData = await getDoc(doc(db, "articles", params.id))
     const content = await getArticleContent(params.id)
-    console.log(content)
     const admins = await getAdmins();
     const ret = admins.admins;
     return {
         props: {
-            content,
+            articleData: articleData.data(),
+            content: content,
             admins: ret
         }
     }

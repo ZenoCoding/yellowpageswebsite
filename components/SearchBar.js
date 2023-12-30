@@ -56,18 +56,17 @@ export function SearchBar({ className, isIconOnly = true }) {
                                     scale: isActive ? 0.8 : 1,
                                     width: isActive ? 0 : "auto"
                                 }}
-                                transition={{duration: 0.2}}
+                                transition={{duration: 0.4}}
                             >
-                                <span className={`text-black ${isActive ? "hidden" : "block"}`}>Search</span>
+                                <span className={`text-black text-lg ${isActive ? "hidden" : "block"}`}>Search</span>
                             </motion.div>}
                     </button>
                     <motion.div
                         initial={false}
                         animate={{
-                            width: isActive ? 250 : 0,
-                            padding: isActive ? "0" : "250",
+                            width: isActive ? "250px" : "0px"
                         }}
-                        transition={{duration: 0.3}}
+                        transition={{duration: 0.4}}
                         className="overflow-hidden flex items-center"
                     >
                         <form onSubmit={handleSearchSubmit} className={`border-b-2 border-black`}>

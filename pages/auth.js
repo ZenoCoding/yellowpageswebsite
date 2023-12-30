@@ -33,10 +33,8 @@ const Auth = () => {
                     <FirebaseAuth/>
                 </div>
                 <p className={""}>
-                    <Link href={"/"}>
-                        <a className={"font-medium hover:text-indigo-900 hover:underline hover:text-indigo-600"}>
-                            &larr; Go Home
-                        </a>
+                    <Link href={"/"} className="font-medium text-indigo-900 hover:underline hover:text-indigo-600">
+                        &larr; Go Home
                     </Link>
                 </p>
             </div>

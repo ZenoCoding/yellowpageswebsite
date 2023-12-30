@@ -45,7 +45,7 @@ export default function Upload({admins}) {
     if (!inc) {
         return (
             <div>Sry you're not authorized.
-                <Link legacyBehavior href="/" className="border-2" onClick={(e) => handleClick(e)}>
+                <Link href="/" className="border-2" onClick={(e) => handleClick(e)}>
                     Sign out
                 </Link>
             </div>
@@ -59,6 +59,7 @@ date: "1000-01-01"
 author: [""]
 tags: [""]
 blurb: ""
+imageUrl: ""
 ---
 `);
     const [htmlData, setHtmlData] = useState("");
@@ -69,6 +70,7 @@ blurb: ""
     const [uploadData, setUploadData] = useState("")
     const [tagsData, setTagsData] = useState("")
     const [blurbLen, setBlurbLen] = useState(0)
+    const [imageUrlData, setImageUrlData] = useState("")
     async function update() {
         setFormData(document.getElementById('updateText').value);
         var matterResult = null;
@@ -87,6 +89,8 @@ blurb: ""
             setTitleData(matterResult.data.title);
             makeCommaSeparatedString(matterResult.data.author, true)
             setAuthorData(makeCommaSeparatedString(matterResult.data.author, true))
+            setImageUrlData(matterResult.data.imageUrl)
+
             const processedContent = await remark()
                 .use(html)
                 .process(matterResult.content);
@@ -139,6 +143,7 @@ blurb: ""
             title: matterResult.data.title,
             tags: matterResult.data.tags,
             blurb: matterResult.data.blurb,
+            imageUrl: matterResult.data.imageUrl,
             path
         });
         var file = new Blob([formData], {type: "text/plain"});
@@ -208,7 +213,7 @@ blurb: ""
             <div className="m-auto max-w-2xl my-10">
                 <div>
                     <div>Wow! What an ugly upload page! Maybe I'll make it look better some other day. <br/>
-                        <Link legacyBehavior href="/" className="border-2" onClick={(e) => handleClick(e)}>
+                        <Link href="/" className="border-2" onClick={(e) => handleClick(e)}>
                             Sign out
                         </Link>
                     </div>
