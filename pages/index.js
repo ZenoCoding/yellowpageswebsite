@@ -19,8 +19,8 @@ export default function Home({ allArticleData }) {
     return (
         <div className="bg-white">
             <Navbar />
-            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 p-8">
+            <div className="mx-auto justify-center max-w-2xl px-4 sm:px-6 lg:max-w-7xl lg:px-8">
+                <div className="columns-1 md:columns-2 lg:columns-3 gap-4 p-8">
                     {allArticleData.map(({ id, date, author, title, tags, blurb, imageUrl, size }, index) => {
                         let spanClasses = '';
                         let imageHeight = 'h-48';
@@ -47,7 +47,7 @@ export default function Home({ allArticleData }) {
                                 <Link href={`/posts/${id}`} className="block bg-white border border-slate-200 rounded-lg shadow-md hover:shadow-lg overflow-hidden">
                                     <div>
                                         {imageUrl && (
-                                            <img src={imageUrl} alt={`Cover image for ${title}`} className={`w-full object-cover ${imageHeight}`} />
+                                            <img src={imageUrl} alt={`Cover image for ${title}`} className={`w-full object-cover w-full`} />
                                         )}
                                         <div className="p-3">
                                             <h5 className="leading-snug text-lg font-semibold tracking-tight text-gray-900 dark:text-white">{title}</h5>
