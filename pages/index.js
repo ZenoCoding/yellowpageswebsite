@@ -3,19 +3,8 @@ import Link from 'next/link'
 import Navbar from "../components/Navbar.js"
 import { format, parseISO } from 'date-fns'
 import { makeCommaSeparatedString } from '../lib/makeCommaSeparatedString'
-import { useState } from 'react';
 
 export default function Home({ allArticleData }) {
-    const [searchTerm, setSearchTerm] = useState('');
-
-    const handleSearchChange = (event) => {
-        setSearchTerm(event.target.value);
-    };
-
-    const filteredArticles = allArticleData.filter((article) =>
-        article.title.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
     return (
         <div className="bg-white">
             <Navbar />
@@ -24,7 +13,6 @@ export default function Home({ allArticleData }) {
                     {allArticleData.map(({ id, date, author, title, tags, blurb, imageUrl, size }, index) => {
                         let spanClasses = '';
                         let imageHeight = 'h-48';
-                        console.log(size);
                         switch (size) {
                             case 'large':
                                 spanClasses = 'col-span-2 lg:col-span-2 row-span-2';
