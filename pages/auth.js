@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import {useRouter} from "next/router";
 import Loading from "../components/Loader";
+import ContentNavbar from "../components/ContentNavbar";
 
 const Auth = () => {
     const {user} = useUser();
@@ -15,28 +16,23 @@ const Auth = () => {
     if (user !== undefined) {
         router.replace({
             pathname: '/upload',
-            //   query: {
-            //     userId: user.id
-            //   }
         });
         return null;
     }
     return (
 
-        <div>
-            <div
-                className={
-                    "absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-8 w-full"
-                }
-            >
+        <div className="flex h-screen justify-center items-center">
+            <ContentNavbar/>
+            <div className= "flex flex-col items-center gap-8 w-full">
                 <div className={"w-full"}>
                     <FirebaseAuth/>
                 </div>
-                <p className={""}>
-                    <Link href={"/"} className="font-medium text-indigo-900 hover:underline hover:text-indigo-600">
-                        &larr; Go Home
-                    </Link>
-                </p>
+                <Link href={"/auth"} className="italic text-xl hover:underline hover:text-indigo-600">
+                    Popup blocked?
+                </Link>
+                <Link href={"/"} className="font-medium text-indigo-900 hover:underline hover:text-indigo-600">
+                    &larr; Go Home
+                </Link>
             </div>
         </div>
     );

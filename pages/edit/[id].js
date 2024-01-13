@@ -2,7 +2,6 @@ import {getAdmins, getArticleContent} from '../../lib/firebase'
 import {getApp} from "firebase/app"
 import {doc, getDoc, getFirestore, updateDoc} from "firebase/firestore"
 import {getDownloadURL, getStorage, ref, uploadBytesResumable} from "firebase/storage";
-import matter from 'gray-matter';
 import {remark} from 'remark';
 import {useRouter} from 'next/router';
 import {getAuth, signOut} from "firebase/auth";
@@ -13,6 +12,7 @@ import Link from 'next/link'
 import {format, parseISO} from 'date-fns'
 import {makeCommaSeparatedString} from '../../lib/makeCommaSeparatedString'
 import ContentNavbar from "../../components/ContentNavbar";
+import NoAuth from "../../components/auth/NoAuth";
 
 //reinstating, not in lib/firebase cause fs being stinky
 const app = getApp()
@@ -21,13 +21,17 @@ const storage = getStorage(app)
 
 
 export default function Post({articleData, content, admins}) {
-    //then get the text field changes from here
     const auth = getAuth();
     const {user} = useUser();
     const router = useRouter();
     const articleId = router.query.id
 
-    // Define states for form fields
+    if (user == null) {
+        return <NoAuth/>
+    } else if (!Array.from(admins).includes(user.id)) {
+        return <NoAuth permission={true}/>
+    }
+
     const [formData, setFormData] = useState({
         title: articleData.title,
         author: makeCommaSeparatedString(articleData.author),
@@ -52,28 +56,6 @@ export default function Post({articleData, content, admins}) {
         }));
     };
 
-    if (user == null) {
-        return (<div>You're not logged in my man</div>)
-    }
-    // console.log(admins);
-    const inc = Array.from(admins).includes(user.id);
-    const handleClick = (e) => {
-        signOut(auth).then(() => {
-            // Sign-out successful.
-        }).catch((error) => {
-            // An error happened.
-        });
-    };
-    if (!inc) {
-        return (
-            <div>Sorry, you're not authorized.
-                <Link href="/" onClick={(e) => handleClick(e)}>
-                    Sign out
-                </Link>
-            </div>
-        )
-    }
-
     // Markdown to HTML conversion
     const convertMarkdownToHtml = async (markdown) => {
         try {
@@ -84,7 +66,6 @@ export default function Post({articleData, content, admins}) {
         }
     };
 
-    // Form submission handler
     // Form submission handler
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -147,7 +128,8 @@ export default function Post({articleData, content, admins}) {
                     });
 
                     setUploadData("Upload Successful! Redirecting to the article page...");
-                    setTimeout(() => router.push(`/posts/${articleId}`), 5000);
+                    // Redirect to the article page in a new tab
+                    window.open(`/posts/${articleId}`, '_blank');
                 } catch (error) {
                     setErrorData(error.message);
                     setIsUploading(false);
@@ -172,7 +154,7 @@ export default function Post({articleData, content, admins}) {
                         required
                         value={formData.title}
                         onChange={handleChange}
-                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm"
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm p-2"
                     />
                 </div>
 
@@ -187,7 +169,7 @@ export default function Post({articleData, content, admins}) {
                         required
                         value={formData.author}
                         onChange={handleChange}
-                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm"
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm p-2"
                     />
                 </div>
 
@@ -202,7 +184,7 @@ export default function Post({articleData, content, admins}) {
                         required
                         value={formData.date}
                         onChange={handleChange}
-                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm"
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm p-2"
                     />
                 </div>
 
@@ -216,7 +198,7 @@ export default function Post({articleData, content, admins}) {
                         required
                         value={formData.blurb}
                         onChange={handleChange}
-                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm"
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm p-2"
                     />
                 </div>
 
@@ -231,7 +213,7 @@ export default function Post({articleData, content, admins}) {
                         required
                         value={formData.tags}
                         onChange={handleChange}
-                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm"
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm p-2"
                     />
                 </div>
 
@@ -245,7 +227,7 @@ export default function Post({articleData, content, admins}) {
                         type="text"
                         value={formData.imageUrl}
                         onChange={handleChange}
-                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm"
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm p-2"
                     />
                 </div>
 
@@ -258,7 +240,7 @@ export default function Post({articleData, content, admins}) {
                         name="size"
                         value={formData.size}
                         onChange={handleChange}
-                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm"
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm p-2"
                     >
                         <option value="normal">Normal</option>
                         <option value="medium">Medium</option>
@@ -278,7 +260,7 @@ export default function Post({articleData, content, admins}) {
                         value={formData.markdown}
                         onChange={handleChange}
                         rows={10}
-                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm"
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm p-2"
                     />
                 </div>
 
