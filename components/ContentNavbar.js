@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { FiSearch } from 'react-icons/fi';
 import { Bars3Icon } from '@heroicons/react/24/outline';
 import { LogoIcon } from './Logo';
-import {SearchBar} from "./SearchBar";
+import SearchBar from "./SearchBar";
 
 const navigation = [
     { name: 'Local', href: '/category/local'},

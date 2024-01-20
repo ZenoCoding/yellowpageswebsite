@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { FiSearch } from 'react-icons/fi';
 import { motion } from 'framer-motion';
 
-export function SearchBar({ className, isIconOnly = true }) {
+export default function SearchBar({ className, isIconOnly = true }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [isActive, setIsActive] = useState(false);
     const router = useRouter();

@@ -4,7 +4,7 @@ import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
 import Logo from './Logo.js';
 import Link from "next/link";
 import { useRouter } from 'next/router';
-import { SearchBar } from "./SearchBar";
+import SearchBar from "./SearchBar";
 
 const navigation = [
     {name: 'Local', href: '/category/local'},
