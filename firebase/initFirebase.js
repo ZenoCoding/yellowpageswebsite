@@ -1,13 +1,5 @@
 import firebase from "firebase/compat/app";
 import { getApps, initializeApp, getApp } from "firebase/app"
-// import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// the below imports are option - comment out what you don't need
-// import "firebase/auth";
-// import "firebase/firestore";
-// import "firebase/storage";
-// import "firebase/analytics";
-// import "firebase/performance";
 
 const clientCredentials = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -38,7 +30,4 @@ export default function initFirebase() {
         firebaseApp = getApp(); 
     }
     // return firebaseApp;
-//   if (!getApps().length) {
-    
-//   }
 }
