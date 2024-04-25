@@ -1,22 +1,19 @@
 import Date from '../components/date'
 import {getAdmins} from '../lib/firebase'
 import {getApp} from "firebase/app"
-import {doc, getFirestore, setDoc, updateDoc} from "firebase/firestore"
+import {doc, getFirestore, setDoc} from "firebase/firestore"
 import {getDownloadURL, getStorage, ref, uploadBytesResumable} from "firebase/storage";
-import matter from 'gray-matter';
 import {remark} from 'remark';
 import {useRouter} from 'next/router';
-import {getAuth, signOut} from "firebase/auth";
+import {getAuth} from "firebase/auth";
 import {useUser} from "../firebase/useUser";
 import {useState} from 'react'
 import html from 'remark-html';
-import Link from 'next/link'
 import {format, parseISO} from 'date-fns'
-import {checkCategory} from '../lib/checkCategory'
-import {checkBlurb} from '../lib/checkBlurb'
-import {makeCommaSeparatedString} from '../lib/makeCommaSeparatedString'
 import NoAuth from "../components/auth/NoAuth";
 import ContentNavbar from "../components/ContentNavbar";
+import ArticlePreview from "../components/ArticlePreview";
+import matter from "gray-matter";
 
 // var user_id = null;
 
@@ -60,9 +57,18 @@ export default function Upload({admins}) {
         }));
     };
 
+    const handleMarkdownChange = (e) => {
+        setFormData((prevFormData) => ({
+            ...prevFormData,
+            markdown: e.target.value,
+        }));
+        // update the HTML preview
+        convertMarkdownToHtml(e.target.value).then((html) => setHtmlData(html));
+    }
+
     const convertMarkdownToHtml = async (markdown) => {
         try {
-            const processedContent = await remark().use(html).process(markdown);
+            const processedContent = await remark().use(html).process(matter(markdown).content);
             return processedContent.toString();
         } catch (error) {
             throw new Error('Markdown to HTML conversion failed: ' + error.message);
@@ -150,7 +156,7 @@ export default function Upload({admins}) {
     // JSX for the form within the Post component
     return (
         <div className="m-auto max-w-2xl my-10 px-5">
-            <ContentNavbar />
+            <ContentNavbar/>
             <h1 className="text-3xl font-bold mb-3">Upload Article</h1>
             <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
@@ -268,7 +274,7 @@ export default function Upload({admins}) {
                         name="markdown"
                         required
                         value={formData.markdown}
-                        onChange={handleChange}
+                        onChange={handleMarkdownChange}
                         rows={10}
                         className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm p-2"
                     />
@@ -286,6 +292,7 @@ export default function Upload({admins}) {
                     {uploadData && <p className="text-green-500">{uploadData}</p>}
                 </div>
             </form>
+            <ArticlePreview formData={formData} html={htmlData}/>
         </div>
     );
 };

@@ -13,6 +13,8 @@ import {format, parseISO} from 'date-fns'
 import {makeCommaSeparatedString} from '../../lib/makeCommaSeparatedString'
 import ContentNavbar from "../../components/ContentNavbar";
 import NoAuth from "../../components/auth/NoAuth";
+import ArticlePreview from "../../components/ArticlePreview";
+import matter from "gray-matter";
 
 //reinstating, not in lib/firebase cause fs being stinky
 const app = getApp()
@@ -47,6 +49,8 @@ export default function Post({articleData, content, admins}) {
     const [errorData, setErrorData] = useState("");
     const [isUploading, setIsUploading] = useState(false);
 
+    const [htmlData, setHtmlData] = useState("");
+
     // Form input change handlers
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -56,10 +60,20 @@ export default function Post({articleData, content, admins}) {
         }));
     };
 
+    const handleMarkdownChange = (e) => {
+        const { name, value } = e.target;
+        setFormData((prevFormData) => ({
+            ...prevFormData,
+            [name]: value,
+        }));
+        // update the HTML preview
+        convertMarkdownToHtml(e.target.value).then((html) => setHtmlData(html));
+    }
+
     // Markdown to HTML conversion
     const convertMarkdownToHtml = async (markdown) => {
         try {
-            const processedContent = await remark().use(html).process(markdown);
+            const processedContent = await remark().use(html).process(matter(markdown).content);
             return processedContent.toString();
         } catch (error) {
             throw new Error('Markdown to HTML conversion failed: ' + error.message);
@@ -142,6 +156,7 @@ export default function Post({articleData, content, admins}) {
     return (
         <div className="m-auto max-w-2xl my-10 px-5">
             <ContentNavbar />
+            <h1 className="text-3xl">Edit Article</h1>
             <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
                     <label htmlFor="title" className="block text-sm font-medium text-gray-700">
@@ -258,7 +273,7 @@ export default function Post({articleData, content, admins}) {
                         name="markdown"
                         required
                         value={formData.markdown}
-                        onChange={handleChange}
+                        onChange={handleMarkdownChange}
                         rows={10}
                         className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm p-2"
                     />
@@ -276,6 +291,7 @@ export default function Post({articleData, content, admins}) {
                     {uploadData && <p className="text-green-500">{uploadData}</p>}
                 </div>
             </form>
+            <ArticlePreview html={htmlData} formData={formData} />
         </div>
     );
 }
