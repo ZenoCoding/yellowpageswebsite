@@ -1,4 +1,4 @@
-import Date from "./Date";
+import Date from "./date";
 
 export default function ArticlePreview(props) {
     return <div>
