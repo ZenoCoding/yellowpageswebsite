@@ -5,6 +5,8 @@ todo:
 - [x] search bar
 - [x] better upload page
 - [x] accessible editor tools
+- [ ] way to delete articles
+- [ ] faster loading times
 - [ ] user profile button
   - [ ] accessible upload
   - [ ] sign in/sign out
