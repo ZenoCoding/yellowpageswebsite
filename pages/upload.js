@@ -280,6 +280,9 @@ export default function Upload({admins}) {
                     />
                 </div>
 
+                <a href={"https://docs.google.com/document/d/1_lNHBxtpaBa1JRqrbapmCj_L_k-yfSsTSkgGp_1pnL0/edit"}
+                   className="underline italic text-gray-500">Confused?</a>
+
                 <div className="flex items-center justify-between">
                     <button
                         type="submit"
