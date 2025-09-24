@@ -1,6 +1,5 @@
 import FirebaseAuth from "../components/auth/FirebaseAuth";
 import {useUser} from "../firebase/useUser";
-
 import Link from "next/link";
 
 import {useRouter} from "next/router";

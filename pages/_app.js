@@ -8,6 +8,7 @@ import Loader from "../components/Loader";
 import Head from "next/head"
 import '../styles/global.css';
 
+
 export default function App({Component, pageProps}) {
     // return <AuthUserProvider><Component {...pageProps} /> </AuthUserProvider>
     const [loading, setLoading] = useState(false);
