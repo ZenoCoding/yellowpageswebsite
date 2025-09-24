@@ -1,17 +1,10 @@
-import {getAdmins, getAllArticleData} from '../lib/firebase'
+import { getAllArticleData } from '../lib/firebase'
 import Link from 'next/link'
 import Navbar from "../components/Navbar.js"
 import { format, parseISO } from 'date-fns'
 import { makeCommaSeparatedString } from '../lib/makeCommaSeparatedString'
-import {PencilIcon, PlusIcon} from "@heroicons/react/20/solid";
-import {useUser} from "../firebase/useUser";
-import {useRouter} from "next/router";
 
-export default function Home({ allArticleData, admins }) {
-
-    const { user } = useUser();
-    const router = useRouter();
-    const admin = user != null && Array.from(admins).includes(user.id)
+export default function Home({ allArticleData }) {
     return (
         <div className="bg-white">
             <Navbar />
@@ -52,16 +45,8 @@ export default function Home({ allArticleData, admins }) {
                                     </div>
                                 </Link>
                             </div>
-
-
                         );
                     })}
-                    {admin && <button
-                        className="fixed right-10 top-1/5 bg-white border-2 border-gray-300 rounded-full p-2 hover:shadow-lg cursor-pointer"
-                        onClick={() => router.push(`/upload`)}
-                    >
-                        <PlusIcon className="h-5 w-5 text-gray-700"/>
-                    </button>}
                 </div>
             </div>
         </div>
@@ -73,7 +58,6 @@ export async function getServerSideProps() {
     return {
         props: {
             allArticleData,
-            admins: (await getAdmins()).admins,
         },
     };
 }

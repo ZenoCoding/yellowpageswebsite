@@ -20,9 +20,15 @@ const clientCredentials = {
 
 let firebaseApp = initializeApp(clientCredentials);
 
+import { readFile } from 'fs/promises';
+
+async function loadJsonFile(filePath) {
+    const data = await readFile(filePath, 'utf8');
+    return JSON.parse(data);
+}
 
 // Usage
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+const serviceAccount = await loadJsonFile('./bifyellowpages-firebase-admin.json');
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
