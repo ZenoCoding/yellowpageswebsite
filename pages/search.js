@@ -66,7 +66,7 @@ export default function Search({ allArticleData }) {
                     ))
                 ) : (
                     <div className="text-center py-4">
-                        <p className="text-gray-700">No results found for "{searchTerm}".</p>
+                        <p className="text-gray-700">"{searchTerm}"? What's that? Try searching something else.</p>
                     </div>
                 )}
             </div>
