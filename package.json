@@ -29,6 +29,8 @@
   },
   "scripts": {
     "dev": "next dev",
+    "lint": "next lint",
+    "migrate:feature": "node scripts/migrateCreativeToFeature.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -44,6 +46,8 @@
   "devDependencies": {
     "@tailwindcss/aspect-ratio": "^0.4.2",
     "autoprefixer": "^10.4.13",
+    "eslint": "^8.56.0",
+    "eslint-config-next": "^13.5.6",
     "postcss": "8.4.31",
     "tailwindcss": "^3.2.4"
   }

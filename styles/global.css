@@ -17,10 +17,6 @@ p {
   @apply text-lg;
 }
 
-textarea {
-  @apply w-full border-2 text-xs h-80;
-}
-
 button {
   @apply border-2;
 }

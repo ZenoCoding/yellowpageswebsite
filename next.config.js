@@ -1,3 +1,5 @@
 module.exports = {
-  /* config options here */
-}
+  images: {
+    domains: ['firebasestorage.googleapis.com', 'i.ibb.co', 'i.postimg.cc'],
+  },
+};

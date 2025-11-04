@@ -11,7 +11,7 @@ const navigation = [
     {name: 'A&E', href: '/category/ae'},
     {name: 'News', href: '/category/news'},
     {name: 'Opinion', href: '/category/opinion'},
-    {name: 'Creative', href: '/category/creative'},
+    {name: 'Feature', href: '/category/feature'},
     {name: 'Sports', href: '/category/sports'},
     {name: 'Humans of BASIS', href: '/category/hob'},
     {name: 'About Us', href: '/about'}

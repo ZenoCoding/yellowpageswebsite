@@ -5,12 +5,30 @@ import { parseISO, format } from 'date-fns'
 import { makeCommaSeparatedString } from '../../lib/makeCommaSeparatedString'
 
 export default function Home({ articleData }) {
+    const getStaffNames = (article) => {
+        if (!article) return [];
+        if (Array.isArray(article.staffNames) && article.staffNames.length > 0) {
+            return article.staffNames;
+        }
+        if (Array.isArray(article.author)) {
+            return article.author.filter((name) => typeof name === 'string' && name.trim().length > 0);
+        }
+        if (typeof article.author === 'string') {
+            return article.author
+                .split(',')
+                .map((name) => name.trim())
+                .filter((name) => name.length > 0);
+        }
+        return [];
+    };
+
     return (
         <div className="bg-white">
             <Navbar />
             <div className="mx-auto justify-center max-w-2xl px-4 sm:px-6 lg:max-w-7xl lg:px-8">
                 <div className="columns-1 md:columns-2 lg:columns-3 gap-4 p-8">
-                    {articleData.map(({ id, date, author, title, tags, blurb, imageUrl, size }, index) => {
+                    {articleData.map((article, index) => {
+                        const {id, date, author, title, tags, blurb, imageUrl, size} = article;
                         let spanClasses = '';
                         let imageHeight = 'h-48';
                         switch (size) {
@@ -39,7 +57,9 @@ export default function Home({ articleData }) {
                                         )}
                                         <div className="p-3">
                                             <h5 className="leading-snug text-lg font-semibold tracking-tight text-gray-900 dark:text-white">{title}</h5>
-                                            <h5 className="mb-1 text-sm tracking-tight text-gray-500 dark:text-white">By {makeCommaSeparatedString(author)} | {format(parseISO(date), 'LLLL d, yyyy')}</h5>
+                                            <h5 className="mb-1 text-sm tracking-tight text-gray-500 dark:text-white">
+                                                By {makeCommaSeparatedString(getStaffNames(article))} | {format(parseISO(date), 'LLLL d, yyyy')}
+                                            </h5>
                                             <p className="text-sm text-gray-700 dark:text-gray-400">{blurb}</p>
                                         </div>
                                     </div>
