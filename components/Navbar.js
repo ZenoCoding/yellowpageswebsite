@@ -7,11 +7,10 @@ import { useRouter } from 'next/router';
 import SearchBar from "./SearchBar";
 
 const navigation = [
-    {name: 'Local', href: '/category/local'},
-    {name: 'A&E', href: '/category/ae'},
     {name: 'News', href: '/category/news'},
+    {name: 'Feature', href: '/category/feature'},
     {name: 'Opinion', href: '/category/opinion'},
-    {name: 'Creative', href: '/category/creative'},
+    {name: 'A&E', href: '/category/ae'},
     {name: 'Sports', href: '/category/sports'},
     {name: 'Humans of BASIS', href: '/category/hob'},
     {name: 'About Us', href: '/about'}

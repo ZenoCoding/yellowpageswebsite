@@ -2,6 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
+.article-figure {
+  @apply my-5 mx-auto max-w-3xl text-center;
+}
+
+.article-figure img {
+  @apply w-full h-auto object-cover shadow-sm;
+}
+
+.article-figure__caption {
+  @apply mt-2 text-left text-sm leading-relaxed text-slate-600 italic;
+}
+
+.article-figure__caption-text {
+  @apply block font-medium text-slate-700 not-italic;
+}
+
+.article-figure__credit {
+  @apply mt-1 block text-[0.7rem] uppercase tracking-widest text-slate-500 not-italic;
+}
+
+.article-figure__placeholder {
+  padding: 2rem;
+  border: 1px dashed #cbd5f5;
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
 h1 {
   @apply text-2xl font-extrabold;
 }
@@ -15,10 +42,6 @@ h3 {
 p {
   @apply mb-3;
   @apply text-lg;
-}
-
-textarea {
-  @apply w-full border-2 text-xs h-80;
 }
 
 button {
