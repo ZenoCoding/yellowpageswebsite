@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import ContentNavbar from "../components/ContentNavbar";
 import Logo, { LogoIcon } from "../components/Logo";
 import {doc, getDoc} from "firebase/firestore";
@@ -28,9 +29,12 @@ export default function Editor({ admins }) {
                             <li className="mb-2">Article 2</li>
                             <li className="mb-2">Article 3</li>
                         </ul>
-                        <button>
-                            <a href="/upload" className="text-white text-sm border-transparent bg-blue-500 hover:bg-blue-600 px-2 py-3 rounded ">Create New Article</a>
-                        </button>
+                        <Link
+                            href="/upload"
+                            className="inline-flex items-center rounded bg-blue-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+                        >
+                            Create New Article
+                        </Link>
                     </div>
                     <div className="bg-white shadow rounded-lg p-6">
                         <h2 className="text-xl font-semibold mb-4">Drafts</h2>
@@ -39,6 +43,18 @@ export default function Editor({ admins }) {
                             <li className="mb-2">Draft 2</li>
                             <li className="mb-2">Draft 3</li>
                         </ul>
+                    </div>
+                    <div className="bg-white shadow rounded-lg p-6">
+                        <h2 className="text-xl font-semibold mb-4">Staff Directory</h2>
+                        <p className="text-sm text-gray-600 mb-4">
+                            Keep the staff list up to date so the upload form stays accurate and minimal.
+                        </p>
+                        <Link
+                            href="/admin/authors"
+                            className="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                        >
+                            Manage Staff
+                        </Link>
                     </div>
                     <div className="bg-white shadow rounded-lg p-6">
                         <h2 className="text-xl font-semibold mb-4">Statistics</h2>

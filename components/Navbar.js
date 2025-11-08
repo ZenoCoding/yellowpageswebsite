@@ -7,13 +7,12 @@ import { useRouter } from 'next/router';
 import SearchBar from "./SearchBar";
 
 const navigation = [
-    {name: 'Local', href: '/category/local'},
-    {name: 'A&E', href: '/category/ae'},
     {name: 'News', href: '/category/news'},
+    {name: 'Feature', href: '/category/feature'},
     {name: 'Opinion', href: '/category/opinion'},
-    {name: 'Creative', href: '/category/creative'},
+    {name: 'A&E', href: '/category/ae'},
     {name: 'Sports', href: '/category/sports'},
-    {name: 'HoB', href: '/category/hob'},
+    {name: 'Humans of BASIS', href: '/category/hob'},
     {name: 'About Us', href: '/about'}
 ];
 
@@ -24,7 +23,7 @@ export default function Navbar() {
     return (
         <div className="lg:pt-10 md:pt-5 px-4 md:px-8">
             <div className="flex flex-col items-center w-full lg:items-start">
-                <div className="flex w-full justify-between items-center relative">
+                <div className="flex w-full justify-between lg:justify-center items-center">
                     <button
                         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                         className="p-2 rounded-md text-gray-700 lg:hidden"
@@ -33,9 +32,7 @@ export default function Navbar() {
                         <Bars3Icon className="h-6 w-6" />
                     </button>
                     <Logo/>
-                    <Link href="/auth" className="hidden lg:block fixed top-2 right-2 mr-2 underline text-gray-500 italic z-50">
-                        Editor Login
-                    </Link>
+                    <div className="hidden lg:block" /> {/* Placeholder to keep logo centered */}
                 </div>
                 <div className="hidden lg:flex justify-center items-center space-x-6 w-full">
                     {navigation.map((item) => (
@@ -46,10 +43,9 @@ export default function Navbar() {
                     <SearchBar className="hover:text-gray-500" isIconOnly={false}/>
                 </div>
 
-
             </div>
             <Dialog as="div" open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)}>
-                <Dialog.Panel className="fixed inset-0 z-10 overflow-y-auto bg-white p-6 flex flex-col">
+                <Dialog.Panel className="fixed inset-0 z-10 overflow-y-auto bg-white p-6">
                     <div className="flex items-center justify-between">
                         <button
                             onClick={() => setMobileMenuOpen(false)}
@@ -60,21 +56,14 @@ export default function Navbar() {
                         </button>
                         <Logo/>
                     </div>
-                    <div className="flex flex-col flex-1 mt-5">
-                        <div>
-                            {navigation.map((item) => (
-                                <Link key={item.name} href={item.href}
-                                      className="text-xl hover:bg-gray-50 block px-3 py-2 rounded-md font-medium">
-                                    {item.name}
-                                </Link>
-                            ))}
-                            <SearchBar isIconOnly={false} />
-                        </div>
-                        <div className="mt-auto">
-                            <Link href="/auth" className="underline text-gray-500 italic block text-center py-2">
-                                Editor Login
+                    <div className="mt-5">
+                        {navigation.map((item) => (
+                            <Link key={item.name} href={item.href}
+                                  className="text-xl hover:bg-gray-50 block px-3 py-2 rounded-md font-medium">
+                                {item.name}
                             </Link>
-                        </div>
+                        ))}
+                        <SearchBar isIconOnly={false} />
                     </div>
                 </Dialog.Panel>
             </Dialog>
