@@ -10,7 +10,7 @@ const SECTION_METADATA = {
     news: {
         title: 'News',
         heroLabel: 'News Desk',
-        description: 'Reporting on the policy shifts, campus happenings, and announcements shaping BIFU Fremont.',
+        description: 'Reporting on the policy shifts, campus happenings, and announcements shaping BASIS Independent Fremont.',
     },
     feature: {
         title: 'Feature',
@@ -25,17 +25,17 @@ const SECTION_METADATA = {
     sports: {
         title: 'Sports',
         heroLabel: 'Sports Beat',
-        description: 'Scores, strategy, and behind-the-scenes looks at BIFU Fremont athletics.',
+        description: 'Scores, strategy, and behind-the-scenes looks at BASIS Independent Fremont athletics.',
     },
     ae: {
         title: 'A&E',
         heroLabel: 'Arts & Entertainment',
-        description: 'Spotlighting creativity across BIFU Fremont — concerts, galleries, films, and more.',
+        description: 'Spotlighting creativity across BASIS Independent Fremont — concerts, galleries, films, and more.',
     },
     hob: {
         title: 'Humans of BASIS',
         heroLabel: 'Profiles',
-        description: 'Personal spotlights on the students, teachers, and staff who make BIFU Fremont unique.',
+        description: 'Personal spotlights on the students, teachers, and staff who make BASIS Independent Fremont unique.',
     },
 };
 

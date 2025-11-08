@@ -919,15 +919,15 @@ export default function Home({ allArticleData, admins }) {
     return (
         <div className="min-h-screen bg-white">
             <Head>
-                <title>Yellow Pages | Student Journalism at BIFU Fremont</title>
+                <title>Yellow Pages | Student Journalism at BASIS Independent Fremont</title>
                 <meta
                     name="description"
-                    content="Catch up on the latest news, features, opinions, sports, and Humans of BASIS stories from the Yellow Pages staff at BIFU Fremont."
+                    content="Catch up on the latest news, features, opinions, sports, and Humans of BASIS stories from the Yellow Pages staff at BASIS Independent Fremont."
                 />
-                <meta property="og:title" content="Yellow Pages | Student Journalism at BIFU Fremont" />
+                <meta property="og:title" content="Yellow Pages | Student Journalism at BASIS Independent Fremont" />
                 <meta
                     property="og:description"
-                    content="Catch up on the latest news, features, opinions, sports, and Humans of BASIS stories from the Yellow Pages staff at BIFU Fremont."
+                    content="Catch up on the latest news, features, opinions, sports, and Humans of BASIS stories from the Yellow Pages staff at BASIS Independent Fremont."
                 />
             </Head>
             <Navbar />
