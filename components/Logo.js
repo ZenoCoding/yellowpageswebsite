@@ -5,7 +5,8 @@ export default function Logo({ className }) {
             <Link href="/" className="w-full flex justify-center"> {/* Ensures the link itself is also centered */}
                 <img src='/images/yellowPages5.png'
                      className="object-contain h-auto max-w-full md:w-10/12 lg:w-3/4 xl:w-3/5"
-                     alt="Yellow Pages Logo"/>
+                     alt="Yellow Pages Logo"
+                     draggable={false}/>
             </Link>
         </div>
     );
@@ -17,7 +18,8 @@ export function LogoIcon() {
         <div className="mx-auto pt-2 px-2 h-min overflow-hidden max-h-12">
             <Link href="/">
                 <img src='/images/yellowpages.png' className="object-contain h-10 w-10 mx-auto"
-                     alt="Yellow Pages Logo"/>
+                     alt="Yellow Pages Logo"
+                     draggable={false}/>
             </Link>
         </div>
     )

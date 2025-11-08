@@ -1,10 +1,11 @@
-import {ChangeEvent, useEffect, useRef, useState} from 'react';
+import {ChangeEvent, useCallback, useEffect, useRef, useState} from 'react';
 import {getApp} from 'firebase/app';
-import {getStorage, ref, uploadBytesResumable, getDownloadURL} from 'firebase/storage';
+import {getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject} from 'firebase/storage';
 import {
     addDoc,
     arrayRemove,
     collection,
+    deleteDoc,
     doc,
     getDocs,
     getFirestore,
@@ -17,9 +18,19 @@ import {
 } from 'firebase/firestore';
 import {useUser} from '../firebase/useUser';
 
+interface FeaturedImageSelection {
+    id: string;
+    url: string;
+    credit?: string;
+    altText?: string;
+    caption?: string;
+    storagePath?: string;
+}
+
 interface ImageUploadAssistantProps {
-    onSetFeatured: (url: string) => void;
-    onInsertIntoMarkdown: (url: string) => void;
+    onSetFeatured: (image: FeaturedImageSelection) => void;
+    onInsertIntoMarkdown: (value: string) => void;
+    onImageRecordUpdate?: (image: ImageRecord) => void;
     articleId?: string | null;
 }
 
@@ -44,6 +55,10 @@ interface ImageRecord {
 
 const MAX_IMAGES = 50;
 const MAX_LIBRARY_IMAGES = 100;
+const MAX_IMAGE_DIMENSION = 2000; // px, large enough for full-width display
+const DEFAULT_EXPORT_QUALITY = 0.9;
+const PREFERRED_EXPORT_TYPE = 'image/webp';
+const FALLBACK_EXPORT_TYPE = 'image/jpeg';
 
 const createObjectPath = (file: File) => {
     const sanitizedName = file.name.replace(/\s+/g, '-').toLowerCase();
@@ -51,15 +66,97 @@ const createObjectPath = (file: File) => {
     return `article-images/${uniqueSuffix}-${sanitizedName}`;
 };
 
+const readFileAsDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+
+const loadImageFromUrl = (url: string) =>
+    new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = reject;
+        image.src = url;
+    });
+
+const canvasToBlob = (canvas: HTMLCanvasElement, type: string, quality?: number) =>
+    new Promise<Blob | null>((resolve) => {
+        canvas.toBlob((blob) => resolve(blob), type, quality);
+    });
+
+const getOptimizedFileName = (fileName: string, extension: string) => {
+    const normalizedExtension = extension.startsWith('.') ? extension : `.${extension}`;
+    if (!fileName) {
+        return `image${normalizedExtension}`;
+    }
+    const base = fileName.includes('.') ? fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
+    return `${base}${normalizedExtension}`;
+};
+
+const convertFileForUpload = async (file: File): Promise<File | null> => {
+    if (typeof window === 'undefined') {
+        return null;
+    }
+    try {
+        const dataUrl = await readFileAsDataUrl(file);
+        const image = await loadImageFromUrl(dataUrl);
+        const {width, height} = image;
+        if (!width || !height) {
+            return null;
+        }
+        const maxDimension = Math.max(width, height);
+        const scale = maxDimension > MAX_IMAGE_DIMENSION ? MAX_IMAGE_DIMENSION / maxDimension : 1;
+        const targetWidth = Math.round(width * scale);
+        const targetHeight = Math.round(height * scale);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const context = canvas.getContext('2d');
+        if (!context) {
+            return null;
+        }
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
+        context.drawImage(image, 0, 0, targetWidth, targetHeight);
+
+        const preferredBlob = await canvasToBlob(canvas, PREFERRED_EXPORT_TYPE, DEFAULT_EXPORT_QUALITY);
+        let blob = preferredBlob;
+        let extension = '.webp';
+        let mimeType = PREFERRED_EXPORT_TYPE;
+
+        if (!blob) {
+            blob = await canvasToBlob(canvas, FALLBACK_EXPORT_TYPE, DEFAULT_EXPORT_QUALITY);
+            extension = '.jpg';
+            mimeType = FALLBACK_EXPORT_TYPE;
+        }
+
+        if (!blob) {
+            return null;
+        }
+
+        return new File([blob], getOptimizedFileName(file.name, extension), {type: mimeType});
+    } catch (error) {
+        console.error('convertFileForUpload failed', error);
+        return null;
+    }
+};
+
 export default function ImageUploadAssistant({
                                                  onSetFeatured,
                                                  onInsertIntoMarkdown,
+                                                 onImageRecordUpdate,
                                                  articleId = null,
                                              }: ImageUploadAssistantProps) {
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const {user} = useUser();
     const [articleImages, setArticleImages] = useState<ImageRecord[]>([]);
     const [libraryImages, setLibraryImages] = useState<ImageRecord[]>([]);
+    const articleImagesRef = useRef(articleImages);
+    const libraryImagesRef = useRef(libraryImages);
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -68,6 +165,22 @@ export default function ImageUploadAssistant({
     const [isLibraryOpen, setIsLibraryOpen] = useState(false);
     const [isLoadingLibrary, setIsLoadingLibrary] = useState(false);
     const [savingState, setSavingState] = useState<Record<string, boolean>>({});
+    const metadataSaveTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+
+    useEffect(() => {
+        articleImagesRef.current = articleImages;
+    }, [articleImages]);
+
+    useEffect(() => {
+        libraryImagesRef.current = libraryImages;
+    }, [libraryImages]);
+
+    useEffect(() => {
+        return () => {
+            metadataSaveTimersRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
+            metadataSaveTimersRef.current.clear();
+        };
+    }, []);
 
     const mapDocToImageRecord = (docSnapshot: any): ImageRecord => {
         const data = docSnapshot.data();
@@ -89,6 +202,15 @@ export default function ImageUploadAssistant({
         };
     };
 
+    const notifyImageRecord = useCallback(
+        (record: ImageRecord) => {
+            if (typeof onImageRecordUpdate === 'function' && record?.id) {
+                onImageRecordUpdate(record);
+            }
+        },
+        [onImageRecordUpdate]
+    );
+
     const upsertArticleImage = (record: ImageRecord) => {
         setArticleImages((prev) => {
             const existingIndex = prev.findIndex((item) => item.id === record.id || item.url === record.url);
@@ -99,6 +221,7 @@ export default function ImageUploadAssistant({
             }
             return [record, ...prev].slice(0, MAX_IMAGES);
         });
+        notifyImageRecord(record);
     };
 
     const upsertLibraryImage = (record: ImageRecord) => {
@@ -111,6 +234,7 @@ export default function ImageUploadAssistant({
             }
             return [record, ...prev].slice(0, MAX_LIBRARY_IMAGES);
         });
+        notifyImageRecord(record);
     };
 
     const setSuccessMessage = (message: string | null) => {
@@ -163,6 +287,7 @@ export default function ImageUploadAssistant({
                     });
                     return combined.slice(0, MAX_IMAGES);
                 });
+                records.forEach(notifyImageRecord);
             } catch (error: any) {
                 setFailureMessage(error?.message || 'Unable to load article images.');
             } finally {
@@ -195,25 +320,46 @@ export default function ImageUploadAssistant({
         fileInputRef.current?.click();
     };
 
-    const handleFilesSelected = (event: ChangeEvent<HTMLInputElement>) => {
+    const handleFilesSelected = async (event: ChangeEvent<HTMLInputElement>) => {
         const files = event.target.files;
         if (!files || files.length === 0) {
             return;
         }
-        // Currently handle only the first file; users can upload again for more.
-        uploadFile(files[0]);
-        event.target.value = '';
+        const [firstFile] = files;
+        if (!firstFile) {
+            return;
+        }
+        try {
+            // Currently handle only the first file; users can upload again for more.
+            await uploadFile(firstFile);
+        } catch (error) {
+            console.error('Unexpected upload error', error);
+            setFailureMessage(error instanceof Error ? error.message : 'Unable to upload image.');
+            setIsUploading(false);
+        } finally {
+            event.target.value = '';
+        }
     };
 
-    const uploadFile = (file: File) => {
+    const uploadFile = async (file: File) => {
         setIsUploading(true);
         setUploadProgress(0);
         setFailureMessage(null);
         setSuccessMessage(null);
 
-        const storagePath = createObjectPath(file);
+        const optimizedFile = await convertFileForUpload(file);
+        const isLikelyHeic =
+            /heic|heif/i.test(file.type) || /\.hei[cf]$/i.test(file.name);
+        if (!optimizedFile && isLikelyHeic) {
+            setIsUploading(false);
+            setFailureMessage('This browser cannot process HEIC images. Please convert to JPG or PNG and try again.');
+            return;
+        }
+
+        const fileToUpload = optimizedFile ?? file;
+        const storagePath = createObjectPath(fileToUpload);
         const storageRef = ref(storage, storagePath);
-        const uploadTask = uploadBytesResumable(storageRef, file);
+        const uploadTask = uploadBytesResumable(storageRef, fileToUpload);
 
         uploadTask.on(
             'state_changed',
@@ -232,7 +378,7 @@ export default function ImageUploadAssistant({
                         id: `temp-${Date.now()}`,
                         url: downloadURL,
                         storagePath,
-                        fileName: file.name,
+                        fileName: fileToUpload.name,
                         caption: '',
                         credit: '',
                         altText: '',
@@ -249,7 +395,7 @@ export default function ImageUploadAssistant({
                         const docRef = await addDoc(collection(db, 'images'), {
                             url: downloadURL,
                             storagePath,
-                            fileName: file.name,
+                            fileName: fileToUpload.name,
                             caption: '',
                             credit: '',
                             altText: '',
@@ -289,27 +435,21 @@ export default function ImageUploadAssistant({
         );
     };
 
-    const handleMetadataFieldChange = (
-        id: string,
-        field: 'caption' | 'credit' | 'altText',
-        value: string
-    ) => {
-        setArticleImages((prev) =>
-            prev.map((image) => (image.id === id ? {...image, [field]: value} : image))
-        );
-        setLibraryImages((prev) =>
-            prev.map((image) => (image.id === id ? {...image, [field]: value} : image))
-        );
-    };
-
-    const handleSaveMetadata = async (
+    const handleSaveMetadata = useCallback(async (
         recordId: string,
         options: {suppressToast?: boolean; recordOverride?: ImageRecord} = {}
     ) => {
+        if (metadataSaveTimersRef.current.has(recordId)) {
+            const timeoutId = metadataSaveTimersRef.current.get(recordId);
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
+            metadataSaveTimersRef.current.delete(recordId);
+        }
         const image =
             (options.recordOverride ??
-            articleImages.find((item) => item.id === recordId)) ||
-            libraryImages.find((item) => item.id === recordId);
+            articleImagesRef.current.find((item) => item.id === recordId)) ||
+            libraryImagesRef.current.find((item) => item.id === recordId);
         if (!image) {
             return;
         }
@@ -410,14 +550,43 @@ export default function ImageUploadAssistant({
         } finally {
             setImageSavingState(savingKey, false);
         }
+    }, [articleId, user]);
+
+    const scheduleMetadataSave = useCallback((recordId: string) => {
+        if (!recordId || typeof window === 'undefined') {
+            return;
+        }
+        const existing = metadataSaveTimersRef.current.get(recordId);
+        if (existing) {
+            clearTimeout(existing);
+        }
+        const timeoutId = window.setTimeout(() => {
+            metadataSaveTimersRef.current.delete(recordId);
+            handleSaveMetadata(recordId, {suppressToast: true});
+        }, 800);
+        metadataSaveTimersRef.current.set(recordId, timeoutId);
+    }, [handleSaveMetadata]);
+
+    const handleMetadataFieldChange = (
+        id: string,
+        field: 'caption' | 'credit' | 'altText',
+        value: string
+    ) => {
+        setArticleImages((prev) =>
+            prev.map((image) => (image.id === id ? {...image, [field]: value} : image))
+        );
+        setLibraryImages((prev) =>
+            prev.map((image) => (image.id === id ? {...image, [field]: value} : image))
+        );
+        scheduleMetadataSave(id);
     };
 
     const linkImageToCurrentArticle = async (
         record: ImageRecord,
         options: {silent?: boolean} = {}
-    ) => {
+    ): Promise<boolean> => {
         if (!articleId) {
-            return;
+            return false;
         }
 
         const existingLinks = Array.isArray(record.linkedArticleIds) ? record.linkedArticleIds : [];
@@ -438,7 +607,7 @@ export default function ImageUploadAssistant({
                     suppressToast: true,
                     recordOverride: updatedRecord,
                 });
-                return;
+                return true;
             }
 
             const updatePayload: Record<string, unknown> = {
@@ -450,10 +619,12 @@ export default function ImageUploadAssistant({
             }
 
             await updateDoc(doc(db, 'images', record.id), updatePayload);
+            return true;
         } catch (error: any) {
             if (!options.silent) {
                 setFailureMessage(error?.message || 'Unable to link image to this article.');
             }
+            return false;
         }
     };
 
@@ -499,6 +670,46 @@ export default function ImageUploadAssistant({
         }
     };
 
+    const handleDeleteImage = async (record: ImageRecord) => {
+        if (!record) {
+            return;
+        }
+        const confirmed = window.confirm('Delete this image from the library? This cannot be undone.');
+        if (!confirmed) {
+            return;
+        }
+
+        const storageKey = record.storagePath || record.id;
+        const previousArticleImages = articleImages;
+        const previousLibraryImages = libraryImages;
+
+        setStatusMessage(null);
+        setErrorMessage(null);
+        setImageSavingState(storageKey, true);
+        setArticleImages((prev) => prev.filter((item) => item.id !== record.id));
+        setLibraryImages((prev) => prev.filter((item) => item.id !== record.id));
+
+        try {
+            if (!record.id.startsWith('temp-')) {
+                await deleteDoc(doc(db, 'images', record.id));
+            }
+            if (record.storagePath) {
+                try {
+                    await deleteObject(ref(storage, record.storagePath));
+                } catch (storageError) {
+                    console.error('Failed to delete storage object for image', record.storagePath, storageError);
+                }
+            }
+            setSuccessMessage('Image deleted.');
+        } catch (error: any) {
+            setFailureMessage(error?.message || 'Unable to delete image.');
+            setArticleImages(previousArticleImages);
+            setLibraryImages(previousLibraryImages);
+        } finally {
+            setImageSavingState(storageKey, false);
+        }
+    };
+
     const fetchLibraryImages = async () => {
         setIsLoadingLibrary(true);
         try {
@@ -523,6 +734,7 @@ export default function ImageUploadAssistant({
                 });
                 return combined.slice(0, MAX_LIBRARY_IMAGES);
             });
+            records.forEach(notifyImageRecord);
         } catch (error: any) {
             setFailureMessage(error?.message || 'Unable to load the image library.');
         } finally {
@@ -551,16 +763,40 @@ export default function ImageUploadAssistant({
         }
     };
 
-    const handleSetFeatured = (image: ImageRecord) => {
-        onSetFeatured(image.url);
-        linkImageToCurrentArticle(image, {silent: false});
-        setSuccessMessage('Featured image updated.');
+    const handleSetFeatured = async (image: ImageRecord) => {
+        onSetFeatured({
+            id: image.id,
+            url: image.url,
+            credit: image.credit,
+            altText: image.altText,
+            caption: image.caption,
+            storagePath: image.storagePath,
+        });
+        const wasLinked = await linkImageToCurrentArticle(image, {silent: false});
+        if (wasLinked) {
+            setSuccessMessage('Featured image updated and linked to this article.');
+        } else if (!articleId) {
+            setFailureMessage('Featured image updated, but add a title and publish date to link it to this article.');
+        }
     };
 
-    const handleInsert = (image: ImageRecord) => {
-        onInsertIntoMarkdown(image.url);
-        linkImageToCurrentArticle(image, {silent: true});
-        setSuccessMessage('Image markdown inserted.');
+    const buildFigureToken = (image?: ImageRecord | null) =>
+        image?.id ? `{{image:${image.id}}}` : '';
+
+    const handleCopyFigureToken = async (image: ImageRecord) => {
+        try {
+            const token = buildFigureToken(image);
+            if (!token) {
+                throw new Error('No figure token available yet.');
+            }
+            if (!navigator?.clipboard) {
+                throw new Error('Clipboard access is not available in this browser.');
+            }
+            await navigator.clipboard.writeText(token);
+            setSuccessMessage('Figure token copied. Paste it into the article body.');
+        } catch (error: any) {
+            setFailureMessage(error?.message || 'Unable to copy figure token.');
+        }
     };
 
     const getDisplayUrl = (url: string) => {
@@ -649,7 +885,7 @@ export default function ImageUploadAssistant({
                 <div className="mt-4 space-y-3">
                     {articleImages.map((image) => {
                         const savingKey = image.storagePath || image.id;
-                        const isSavingMetadata = Boolean(savingState[savingKey]);
+                        const isImageBusy = Boolean(savingState[savingKey]);
 
                         return (
                             <div
@@ -731,8 +967,10 @@ export default function ImageUploadAssistant({
                                         />
                                     </label>
                                 </div>
-
-                                <div className="flex flex-wrap gap-2 pt-1">
+                                <div className="flex flex-wrap items-center gap-2 pt-1">
+                                    <span className="rounded bg-slate-100 px-2 py-0.5 text-[0.65rem] font-mono text-slate-600">
+                                        {buildFigureToken(image)}
+                                    </span>
                                     <button
                                         type="button"
                                         onClick={() => handleCopyLink(image.url)}
@@ -749,18 +987,10 @@ export default function ImageUploadAssistant({
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => handleInsert(image)}
-                                        className="rounded-md border border-indigo-200 px-2.5 py-1 text-xs font-medium text-indigo-600 transition hover:border-indigo-300 hover:bg-indigo-50"
+                                        onClick={() => handleCopyFigureToken(image)}
+                                        className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-medium text-blue-600 transition hover:border-blue-300 hover:bg-blue-50"
                                     >
-                                        Insert Markdown
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleSaveMetadata(image.id)}
-                                        disabled={isSavingMetadata}
-                                        className="rounded-md border border-emerald-200 px-2.5 py-1 text-xs font-medium text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
-                                        {isSavingMetadata ? 'Saving…' : 'Save Details'}
+                                        Copy Figure
                                     </button>
                                     {articleId && (
                                         <button
@@ -771,6 +1001,14 @@ export default function ImageUploadAssistant({
                                             Detach from Article
                                         </button>
                                     )}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDeleteImage(image)}
+                                        disabled={isImageBusy}
+                                        className="rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        Delete
+                                    </button>
                                 </div>
                             </div>
                         );
@@ -789,8 +1027,7 @@ export default function ImageUploadAssistant({
                             <div>
                                 <h4 className="text-base font-semibold text-slate-800">Image Library</h4>
                                 <p className="text-xs text-slate-500">
-                                    Browse previously uploaded images. Actions will automatically link them
-                                    to this article.
+                                    Browse previously uploaded images. Actions link them to this article once a title and publish date are set.
                                 </p>
                             </div>
                             <div className="flex items-center gap-2">
@@ -826,6 +1063,8 @@ export default function ImageUploadAssistant({
                                             Boolean(articleId) &&
                                             Array.isArray(image.linkedArticleIds) &&
                                             image.linkedArticleIds.includes(articleId);
+                                        const savingKey = image.storagePath || image.id;
+                                        const isImageBusy = Boolean(savingState[savingKey]);
                                         return (
                                             <div
                                                 key={image.id}
@@ -862,7 +1101,10 @@ export default function ImageUploadAssistant({
                                                 {image.caption && (
                                                     <p className="text-xs text-slate-600">{image.caption}</p>
                                                 )}
-                                                <div className="flex flex-wrap gap-2 pt-1">
+                                                <div className="flex flex-wrap items-center gap-2 pt-1">
+                                                    <span className="rounded bg-slate-100 px-2 py-0.5 text-[0.65rem] font-mono text-slate-600">
+                                                        {buildFigureToken(image)}
+                                                    </span>
                                                     <button
                                                         type="button"
                                                         onClick={() => handleCopyLink(image.url)}
@@ -872,31 +1114,20 @@ export default function ImageUploadAssistant({
                                                     </button>
                                                     <button
                                                         type="button"
+                                                        onClick={() => handleCopyFigureToken(image)}
+                                                        className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-medium text-blue-600 transition hover:border-blue-300 hover:bg-blue-50"
+                                                    >
+                                                        Copy Figure
+                                                    </button>
+                                                    <button
+                                                        type="button"
                                                         onClick={() => handleSetFeatured(image)}
                                                         className="rounded-md border border-amber-200 px-2.5 py-1 text-xs font-medium text-amber-700 transition hover:border-amber-300 hover:bg-amber-50"
                                                     >
                                                         Use as Featured
                                                     </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleInsert(image)}
-                                                        className="rounded-md border border-indigo-200 px-2.5 py-1 text-xs font-medium text-indigo-600 transition hover:border-indigo-300 hover:bg-indigo-50"
-                                                    >
-                                                        Insert Markdown
-                                                    </button>
-                                                    {articleId && !isLinkedToCurrentArticle && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={async () => {
-                                                                await linkImageToCurrentArticle(image, {silent: false});
-                                                                setSuccessMessage('Image linked to this article.');
-                                                            }}
-                                                            className="rounded-md border border-emerald-200 px-2.5 py-1 text-xs font-medium text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-50"
-                                                        >
-                                                            Attach to Article
-                                                        </button>
-                                                    )}
-                                                    {articleId && isLinkedToCurrentArticle && (
+                                                    {articleId ? (
+                                                        isLinkedToCurrentArticle ? (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => unlinkImageFromCurrentArticle(image)}
@@ -904,7 +1135,38 @@ export default function ImageUploadAssistant({
                                                             >
                                                                 Detach from Article
                                                             </button>
-                                                        )}
+                                                        ) : (
+                                                            <button
+                                                                type="button"
+                                                                onClick={async () => {
+                                                                    const wasLinked = await linkImageToCurrentArticle(image, {silent: false});
+                                                                    if (wasLinked) {
+                                                                        setSuccessMessage('Image linked to this article.');
+                                                                    }
+                                                                }}
+                                                                className="rounded-md border border-emerald-200 px-2.5 py-1 text-xs font-medium text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-50"
+                                                            >
+                                                                Link to Article
+                                                            </button>
+                                                        )
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            disabled
+                                                            title="Add a title and publish date to enable linking."
+                                                            className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-400 transition"
+                                                        >
+                                                            Link to Article
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDeleteImage(image)}
+                                                        disabled={isImageBusy}
+                                                        className="rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                                    >
+                                                        Delete
+                                                    </button>
                                                 </div>
                                             </div>
                                         );

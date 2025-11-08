@@ -207,6 +207,9 @@ export default function Search({ allArticleData }) {
                                 const formattedDate = getFormattedDate(date);
                                 const articleTags = normalizeTags(tags);
                                 const previewImage = thumbnail || imageUrl;
+                                const previewAlt = (article.imageAltText && article.imageAltText.trim().length > 0)
+                                    ? article.imageAltText
+                                    : `Preview image for ${title}`;
 
                                 const layoutClasses = previewImage
                                     ? 'grid gap-0 md:grid-cols-[220px,1fr]'
@@ -223,7 +226,7 @@ export default function Search({ allArticleData }) {
                                                 <div className="relative hidden h-full overflow-hidden bg-yellow-100 md:block">
                                                     <img
                                                         src={previewImage}
-                                                        alt={`Preview image for ${title}`}
+                                                        alt={previewAlt}
                                                         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                                                     />
                                                 </div>

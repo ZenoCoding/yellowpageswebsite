@@ -248,7 +248,7 @@ export default function AuthorAdminPage({admins}) {
     const [candidateLoading, setCandidateLoading] = useState(false);
     const [candidateError, setCandidateError] = useState(null);
     const [activeAuthorSnapshot, setActiveAuthorSnapshot] = useState(null);
-    const [showOnlyActive, setShowOnlyActive] = useState(false);
+    const [showOnlyActive, setShowOnlyActive] = useState(true);
 
     const authorLookup = useMemo(() => {
         const map = new Map();

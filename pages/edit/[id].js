@@ -1,12 +1,12 @@
 import {getAdmins, getArticleContent, getAuthorDirectoryForServer, buildStaffDataForArticle} from '../../lib/firebase'
 import {getApp} from "firebase/app"
-import {doc, getDoc, getFirestore, updateDoc} from "firebase/firestore"
-import {getDownloadURL, getStorage, ref, uploadBytesResumable} from "firebase/storage";
+import {doc, getDoc, getFirestore, updateDoc, deleteDoc} from "firebase/firestore"
+import {getDownloadURL, getStorage, ref, uploadBytesResumable, deleteObject} from "firebase/storage";
 import {remark} from 'remark';
 import {useRouter} from 'next/router';
 import {getAuth} from "firebase/auth";
 import {useUser} from "../../firebase/useUser";
-import {useEffect, useMemo, useRef, useState} from 'react'
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import html from 'remark-html';
 import {parseISO} from 'date-fns'
 import ContentNavbar from "../../components/ContentNavbar";
@@ -19,18 +19,41 @@ import ImageUploadAssistant from "../../components/ImageUploadAssistant";
 import {useAuthors} from "../../hooks/useAuthors";
 import matter from "gray-matter";
 import {syncAuthorArticleLinks} from "../../lib/authors";
+import {extractImageTokenIds, replaceImageTokensWithFigures} from "../../lib/articleImages";
+
+const toIsoString = (value) => {
+    if (!value) {
+        return null;
+    }
+    if (typeof value === 'string') {
+        return value;
+    }
+    if (value instanceof Date) {
+        return value.toISOString();
+    }
+    if (typeof value?.toDate === 'function') {
+        try {
+            return value.toDate().toISOString();
+        } catch (error) {
+            return null;
+        }
+    }
+    return null;
+};
 
 //reinstating, not in lib/firebase cause fs being stinky
 const app = getApp()
 const db = getFirestore(app)
 const storage = getStorage(app)
 
-const DEFAULT_TAG_OPTIONS = ['news', 'feature', 'opinion', 'sports', 'hob', 'creative', 'student life', 'events'];
+const DEFAULT_TAG_OPTIONS = ['news', 'feature', 'opinion', 'sports', 'ae', 'hob', 'creative', 'student life', 'events'];
+const EDIT_FORM_DRAFT_PREFIX = 'yellowpages-edit-draft-';
 export default function Post({articleData, content, admins}) {
     const auth = getAuth();
     const {user} = useUser();
     const router = useRouter();
     const articleId = router.query.id
+    const editDraftStorageKey = typeof articleId === 'string' ? `${EDIT_FORM_DRAFT_PREFIX}${articleId}` : null;
     const adminIdSet = useMemo(() => {
         return new Set(Array.isArray(admins) ? admins : []);
     }, [admins]);
@@ -96,6 +119,7 @@ export default function Post({articleData, content, admins}) {
         blurb: articleData.blurb,
         tags: initialTags,
         imageUrl: articleData.imageUrl || '',
+        featuredImageId: typeof articleData.featuredImageId === 'string' ? articleData.featuredImageId : '',
         size: articleData.size || 'normal',
         markdown: content.markdown,
     });
@@ -103,9 +127,102 @@ export default function Post({articleData, content, admins}) {
     const [uploadData, setUploadData] = useState("");
     const [errorData, setErrorData] = useState("");
     const [isUploading, setIsUploading] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const [htmlData, setHtmlData] = useState("");
     const markdownTextareaRef = useRef(null);
+    const handleImageRecordUpdate = useCallback((record) => {
+        if (!record?.id) {
+            return;
+        }
+        setImageMetadata((previous) => {
+            const next = new Map(previous);
+            next.set(record.id, {
+                id: record.id,
+                url: record.url,
+                caption: record.caption || '',
+                credit: record.credit || '',
+                altText: record.altText || '',
+            });
+            return next;
+        });
+    }, []);
+
+    const fetchImageMetadataById = useCallback(async (imageId) => {
+        try {
+            const snapshot = await getDoc(doc(db, 'images', imageId));
+            if (!snapshot.exists()) {
+                return;
+            }
+            const data = snapshot.data() || {};
+            handleImageRecordUpdate({
+                id: snapshot.id,
+                url: typeof data.url === 'string' ? data.url : '',
+                caption: typeof data.caption === 'string' ? data.caption : '',
+                credit: typeof data.credit === 'string' ? data.credit : '',
+                altText: typeof data.altText === 'string' ? data.altText : '',
+            });
+        } catch (error) {
+            console.error('Failed to load image metadata', imageId, error);
+        }
+    }, [handleImageRecordUpdate]);
+    const [imageMetadata, setImageMetadata] = useState(() => {
+        const initial = new Map();
+        if (Array.isArray(content?.referencedImages)) {
+            content.referencedImages.forEach((record) => {
+                if (record?.id) {
+                    initial.set(record.id, record);
+                }
+            });
+        }
+        return initial;
+    });
+    const pendingImageFetchesRef = useRef(new Set());
+    const editDraftTimeoutRef = useRef(null);
+    const editDraftRestoredKeyRef = useRef(null);
+
+    useEffect(() => {
+        if (!isAuthorized || !editDraftStorageKey || typeof window === 'undefined') {
+            return;
+        }
+        if (editDraftRestoredKeyRef.current === editDraftStorageKey) {
+            return;
+        }
+        editDraftRestoredKeyRef.current = editDraftStorageKey;
+        try {
+            const storedDraft = window.localStorage.getItem(editDraftStorageKey);
+            if (!storedDraft) {
+                return;
+            }
+            const parsed = JSON.parse(storedDraft);
+            if (parsed && typeof parsed === 'object') {
+                setFormData((previous) => ({
+                    ...previous,
+                    ...parsed,
+                }));
+            }
+        } catch (error) {
+            console.error('Failed to restore edit draft', error);
+        }
+    }, [editDraftStorageKey, isAuthorized]);
+
+    useEffect(() => {
+        if (!isAuthorized || !editDraftStorageKey || typeof window === 'undefined') {
+            return;
+        }
+        if (editDraftTimeoutRef.current) {
+            clearTimeout(editDraftTimeoutRef.current);
+        }
+        editDraftTimeoutRef.current = window.setTimeout(() => {
+            const payload = JSON.stringify(formData);
+            window.localStorage.setItem(editDraftStorageKey, payload);
+        }, 800);
+        return () => {
+            if (editDraftTimeoutRef.current) {
+                clearTimeout(editDraftTimeoutRef.current);
+            }
+        };
+    }, [formData, editDraftStorageKey, isAuthorized]);
 
     useEffect(() => {
         if (!isAuthorized) {
@@ -143,6 +260,20 @@ export default function Post({articleData, content, admins}) {
         });
     }, [authorNameLookup, isAuthorized]);
 
+    const convertMarkdownToHtml = useCallback(
+        async (markdownValue) => {
+            const source = typeof markdownValue === 'string' ? markdownValue : '';
+            try {
+                const withFigures = replaceImageTokensWithFigures(source, imageMetadata);
+                const processedContent = await remark().use(html, {sanitize: false}).process(matter(withFigures).content);
+                return processedContent.toString();
+            } catch (error) {
+                throw new Error('Markdown to HTML conversion failed: ' + error.message);
+            }
+        },
+        [imageMetadata]
+    );
+
     useEffect(() => {
         if (!isAuthorized) {
             return;
@@ -167,6 +298,45 @@ export default function Post({articleData, content, admins}) {
         });
     }, [authorLookup, isAuthorized]);
 
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+        const tokenIds = extractImageTokenIds(formData.markdown);
+        tokenIds.forEach((imageId) => {
+            if (!imageId || imageMetadata.has(imageId) || pendingImageFetchesRef.current.has(imageId)) {
+                return;
+            }
+            pendingImageFetchesRef.current.add(imageId);
+            fetchImageMetadataById(imageId).finally(() => {
+                pendingImageFetchesRef.current.delete(imageId);
+            });
+        });
+    }, [formData.markdown, imageMetadata, fetchImageMetadataById]);
+
+    useEffect(() => {
+        if (typeof formData.markdown !== 'string') {
+            setHtmlData('');
+            return;
+        }
+        let isActive = true;
+        convertMarkdownToHtml(formData.markdown)
+            .then((htmlString) => {
+                if (isActive) {
+                    setHtmlData(htmlString);
+                }
+            })
+            .catch((error) => {
+                if (isActive) {
+                    console.error('Failed to render markdown preview', error);
+                    setHtmlData('');
+                }
+            });
+        return () => {
+            isActive = false;
+        };
+    }, [formData.markdown, convertMarkdownToHtml]);
+
     // Form input change handlers
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -181,8 +351,6 @@ export default function Post({articleData, content, admins}) {
             ...prevFormData,
             markdown: markdownValue,
         }));
-        // update the HTML preview
-        convertMarkdownToHtml(markdownValue).then((html) => setHtmlData(html));
     };
 
     const handleMarkdownChange = (e) => {
@@ -210,20 +378,23 @@ export default function Post({articleData, content, admins}) {
         return <NoAuth permission={true}/>;
     }
 
-    const handleSetFeaturedImage = (url) => {
+    const handleSetFeaturedImage = (image) => {
         setFormData((prevFormData) => ({
             ...prevFormData,
-            imageUrl: url,
+            imageUrl: image?.url ?? '',
+            featuredImageId: image?.id ?? '',
         }));
     };
 
-    const handleInsertImageMarkdown = (url) => {
+    const handleInsertImageMarkdown = (value) => {
         const textarea = markdownTextareaRef.current;
-        const markdownSnippet = `![image description](${url})`;
+        const trimmedValue = typeof value === 'string' ? value.trim() : '';
+        const isFigureToken = trimmedValue.startsWith('{{image:');
+        const markdownSnippet = isFigureToken ? `\n\n${trimmedValue}\n\n` : `![image description](${trimmedValue})`;
 
         if (textarea && typeof textarea.selectionStart === 'number' && typeof textarea.selectionEnd === 'number') {
-            const {selectionStart, selectionEnd, value} = textarea;
-            const nextValue = value.slice(0, selectionStart) + markdownSnippet + value.slice(selectionEnd);
+            const {selectionStart, selectionEnd, value: currentValue} = textarea;
+            const nextValue = currentValue.slice(0, selectionStart) + markdownSnippet + currentValue.slice(selectionEnd);
             updateMarkdown(nextValue);
 
             requestAnimationFrame(() => {
@@ -242,16 +413,6 @@ export default function Post({articleData, content, admins}) {
             ...prevFormData,
             tags: cleanedTags,
         }));
-    };
-
-    // Markdown to HTML conversion
-    const convertMarkdownToHtml = async (markdown) => {
-        try {
-            const processedContent = await remark().use(html).process(matter(markdown).content);
-            return processedContent.toString();
-        } catch (error) {
-            throw new Error('Markdown to HTML conversion failed: ' + error.message);
-        }
     };
 
     // Form submission handler
@@ -322,6 +483,7 @@ export default function Post({articleData, content, admins}) {
                         blurb: formData.blurb,
                         tags: preparedTags,
                         imageUrl: formData.imageUrl,
+                        featuredImageId: formData.featuredImageId || null,
                         size: formData.size,
                         path: `articles/${articleId}.md`,
                     });
@@ -338,6 +500,9 @@ export default function Post({articleData, content, admins}) {
                     }
 
                     setUploadData("Upload Successful! Redirecting to the article page...");
+                    if (typeof window !== 'undefined' && editDraftStorageKey) {
+                        window.localStorage.removeItem(editDraftStorageKey);
+                    }
                     // Redirect to the article page in a new tab
                     window.open(`/posts/${articleId}`, '_blank');
                 } catch (error) {
@@ -346,6 +511,50 @@ export default function Post({articleData, content, admins}) {
                 }
             }
         );
+    };
+
+    const handleDelete = async () => {
+        if (isDeleting || isUploading) {
+            return;
+        }
+        if (!articleId) {
+            setErrorData('Unable to determine article ID.');
+            return;
+        }
+        const confirmed = window.confirm('Delete this article permanently? This cannot be undone.');
+        if (!confirmed) {
+            return;
+        }
+        setErrorData('');
+        setUploadData('');
+        setIsDeleting(true);
+        try {
+            await deleteDoc(doc(db, "articles", articleId));
+            try {
+                await deleteObject(ref(storage, `articles/${articleId}.md`));
+            } catch (storageError) {
+                console.error('Failed to delete markdown file for article', articleId, storageError);
+            }
+            try {
+                await syncAuthorArticleLinks({
+                    articleId,
+                    nextAuthorIds: [],
+                    previousAuthorIds: previousAuthorIdsRef.current || [],
+                });
+                previousAuthorIdsRef.current = [];
+            } catch (linkError) {
+                console.error('Failed to sync author links for delete', linkError);
+            }
+            setUploadData('Article deleted. Redirecting...');
+            if (typeof window !== 'undefined' && editDraftStorageKey) {
+                window.localStorage.removeItem(editDraftStorageKey);
+            }
+            await router.replace('/');
+        } catch (error) {
+            setErrorData(error instanceof Error ? error.message : 'Unable to delete article.');
+        } finally {
+            setIsDeleting(false);
+        }
     };
 
     // JSX for the form within the Post component
@@ -443,11 +652,18 @@ export default function Post({articleData, content, admins}) {
                             onChange={handleChange}
                             className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm p-2"
                         />
+                        {formData.featuredImageId && (
+                            <p className="mt-1 text-xs text-slate-500">
+                                Linked library image ID:&nbsp;
+                                <span className="font-mono">{formData.featuredImageId}</span>
+                            </p>
+                        )}
                     </div>
 
                     <ImageUploadAssistant
                         onSetFeatured={handleSetFeaturedImage}
                         onInsertIntoMarkdown={handleInsertImageMarkdown}
+                        onImageRecordUpdate={handleImageRecordUpdate}
                         articleId={typeof articleId === 'string' ? articleId : null}
                     />
 
@@ -480,19 +696,29 @@ export default function Post({articleData, content, admins}) {
                             value={formData.markdown}
                             onChange={handleMarkdownChange}
                             ref={markdownTextareaRef}
-                            rows={10}
-                            className="mt-1 block w-full resize-y border border-gray-300 rounded-md shadow-sm sm:text-sm p-2"
+                            rows={18}
+                            className="mt-1 block w-full resize-y border border-gray-300 rounded-md shadow-sm sm:text-sm p-3 font-mono text-sm"
                         />
                     </div>
 
-                    <div className="flex items-center justify-between flex-wrap gap-3">
-                        <button
-                            type="submit"
-                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            disabled={isUploading}
-                        >
-                            {isUploading ? 'Updating...' : 'Update Article'}
-                        </button>
+                    <div className="flex flex-col gap-3">
+                        <div className="flex items-center flex-wrap gap-3">
+                            <button
+                                type="submit"
+                                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-60"
+                                disabled={isUploading || isDeleting}
+                            >
+                                {isUploading ? 'Updating...' : 'Update Article'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleDelete}
+                                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-60"
+                                disabled={isUploading || isDeleting}
+                            >
+                                {isDeleting ? 'Deleting...' : 'Delete Article'}
+                            </button>
+                        </div>
                         {errorData && <p className="text-red-500">{errorData}</p>}
                         {uploadData && <p className="text-green-500">{uploadData}</p>}
                     </div>
@@ -517,15 +743,23 @@ export async function getServerSideProps({params}) {
     }
 
     const rawArticleData = articleSnapshot.data();
+    const serializableArticleData = {
+        ...rawArticleData,
+        date: toIsoString(rawArticleData?.date) || rawArticleData?.date || null,
+        lastViewedAt: toIsoString(rawArticleData?.lastViewedAt),
+        createdAt: toIsoString(rawArticleData?.createdAt),
+        updatedAt: toIsoString(rawArticleData?.updatedAt),
+        publishedAt: toIsoString(rawArticleData?.publishedAt),
+    };
     const authorDirectory = await getAuthorDirectoryForServer();
-    const staffData = buildStaffDataForArticle(rawArticleData, authorDirectory);
+    const staffData = buildStaffDataForArticle(serializableArticleData, authorDirectory);
     const content = await getArticleContent(params.id)
     const admins = await getAdmins();
     const ret = admins.admins;
     return {
         props: {
             articleData: {
-                ...rawArticleData,
+                ...serializableArticleData,
                 author: staffData.staffNames,
                 staffNames: staffData.staffNames,
                 staffProfiles: staffData.staffProfiles,

@@ -1,11 +1,11 @@
 import {Fragment} from 'react';
 import Link from 'next/link';
-import {getAdmins, getArticleContent, getAuthorDirectoryForServer, buildStaffDataForArticle} from '../../lib/firebase';
+import {getAdmins, getArticleContent, getAuthorDirectoryForServer, buildStaffDataForArticle, getLinkedImagesForArticle, getImagesByIds} from '../../lib/firebase';
 import Date from '../../components/date';
 import {makeCommaSeparatedString} from '../../lib/makeCommaSeparatedString';
 import {useRouter} from 'next/router';
 import ContentNavbar from "../../components/ContentNavbar";
-import {doc, getDoc, getFirestore} from "firebase/firestore";
+import {doc, getDoc, getFirestore, increment, serverTimestamp, updateDoc} from "firebase/firestore";
 import {getApp} from "firebase/app";
 import {getStorage} from "firebase/storage";
 import {PencilIcon} from "@heroicons/react/20/solid";
@@ -14,6 +14,26 @@ import {useUser} from "../../firebase/useUser";
 const app = getApp()
 const db = getFirestore(app)
 const storage = getStorage(app)
+
+const toIsoString = (value) => {
+    if (!value) {
+        return null;
+    }
+    if (value instanceof Date) {
+        return value.toISOString();
+    }
+    if (typeof value?.toDate === 'function') {
+        try {
+            return value.toDate().toISOString();
+        } catch (error) {
+            return null;
+        }
+    }
+    if (typeof value === 'string') {
+        return value;
+    }
+    return null;
+};
 
 const buildAuthorLinkLabel = (profile, fallbackName) => {
     if (typeof profile?.fullName === 'string' && profile.fullName.trim().length > 0) {
@@ -136,13 +156,34 @@ export async function getServerSideProps({params}) {
     }
 
     const articleData = articleSnapshot.data();
+
+    try {
+        await updateDoc(articleRef, {
+            viewCount: increment(1),
+            lastViewedAt: serverTimestamp(),
+        });
+        if (typeof articleData.viewCount === 'number' && Number.isFinite(articleData.viewCount)) {
+            articleData.viewCount += 1;
+        } else {
+            articleData.viewCount = 1;
+        }
+    } catch (error) {
+        console.error('Failed to increment view count for article', params.id, error);
+    }
+
+    const serializableArticle = {
+        ...articleData,
+        date: toIsoString(articleData.date) || articleData.date || null,
+        lastViewedAt: toIsoString(articleData.lastViewedAt),
+    };
+
     const authorDirectory = await getAuthorDirectoryForServer();
     const staffData = buildStaffDataForArticle(articleData, authorDirectory);
     const content = await getArticleContent(params.id)
     return {
         props: {
             articleData: {
-                ...articleData,
+                ...serializableArticle,
                 author: staffData.staffNames,
                 staffNames: staffData.staffNames,
                 staffProfiles: staffData.staffProfiles,

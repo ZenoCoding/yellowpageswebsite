@@ -8,7 +8,7 @@ import {
     query,
     where,
 } from 'firebase/firestore';
-import DateDisplay from '../../components/date';
+import { format, parseISO } from 'date-fns';
 import {getAuthorDirectoryForServer, buildStaffDataForArticle} from '../../lib/firebase';
 import {makeCommaSeparatedString} from '../../lib/makeCommaSeparatedString';
 
@@ -200,6 +200,17 @@ const formatArticleCountLabel = (count) => {
     return `${count} published pieces`;
 };
 
+const formatArticleDateLabel = (value) => {
+    if (!value || typeof value !== 'string') {
+        return null;
+    }
+    try {
+        return format(parseISO(value), 'LLLL d, yyyy');
+    } catch (error) {
+        return null;
+    }
+};
+
 export default function AuthorPage({author, articles}) {
     if (!author) {
         return null;
@@ -276,65 +287,66 @@ export default function AuthorPage({author, articles}) {
                             )}
                         </div>
                         {hasArticles ? (
-                            <ul className="mt-6 list-none divide-y divide-slate-200 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-                                {articles.map((article) => (
-                                    <li
-                                        key={article.id}
-                                        className="group flex flex-col overflow-hidden bg-white transition sm:flex-row sm:items-stretch"
-                                    >
-                                        {article.imageUrl && (
+                            <ul className="mt-6 list-none space-y-5">
+                                {articles.map((article) => {
+                                    const dateLabel = formatArticleDateLabel(article.date);
+                                    const tags = Array.isArray(article.tags) ? article.tags.filter((tag) => typeof tag === 'string' && tag.trim().length > 0) : [];
+                                    const previewImage =
+                                        typeof article.imageUrl === 'string' && article.imageUrl.trim().length > 0
+                                            ? article.imageUrl
+                                            : null;
+                                    const layoutClasses = previewImage
+                                        ? 'grid gap-0 md:grid-cols-[220px,1fr]'
+                                        : 'grid gap-0';
+                                    const bylineText = article.byline || 'By Yellow Pages Staff';
+
+                                    return (
+                                        <li key={article.id}>
                                             <Link
                                                 href={`/posts/${article.id}`}
-                                                className="relative block w-full overflow-hidden sm:w-[22rem] sm:flex-shrink-0 sm:self-stretch sm:border-r sm:border-slate-200"
+                                                className="group block overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:border-yellow-300 hover:shadow-lg"
                                             >
-                                                <img
-                                                    src={article.imageUrl}
-                                                    alt={`Cover image for ${article.title}`}
-                                                    className="h-56 w-full object-cover sm:h-full"
-                                                    loading="lazy"
-                                                    decoding="async"
-                                                />
-                                            </Link>
-                                        )}
-                                        <div className="flex flex-1 flex-col gap-3 p-6 transition-colors group-hover:bg-yellow-50 sm:p-8 sm:group-hover:bg-yellow-50">
-                                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                                                <Link
-                                                    href={`/posts/${article.id}`}
-                                                    className="text-xl font-semibold text-slate-900 transition-colors duration-300 group-hover:text-yellow-700 sm:text-2xl"
-                                                >
-                                                    {article.title}
-                                                </Link>
-                                                {article.date && (
-                                                    <div className="text-sm font-semibold text-slate-500">
-                                                        <DateDisplay dateString={article.date}/>
+                                                <div className={layoutClasses}>
+                                                    {previewImage && (
+                                                        <div className="relative hidden h-full overflow-hidden bg-yellow-100 md:block">
+                                                            <img
+                                                                src={previewImage}
+                                                                alt={`Cover image for ${article.title}`}
+                                                                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                                            />
+                                                        </div>
+                                                    )}
+                                                    <div className="flex flex-col gap-4 p-6 sm:p-7">
+                                                        <div className="flex flex-wrap items-center gap-3 text-xs font-medium uppercase tracking-[0.25em] text-slate-500">
+                                                            {dateLabel && (
+                                                                <time dateTime={article.date}>{dateLabel}</time>
+                                                            )}
+                                                            {tags.slice(0, 3).map((tag) => (
+                                                                <span
+                                                                    key={tag}
+                                                                    className="rounded-full border border-yellow-200 bg-yellow-50 px-3 py-1 text-[0.65rem] font-semibold tracking-[0.2em] text-yellow-700"
+                                                                >
+                                                                    {tag}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                        <h3 className="text-2xl font-semibold leading-snug text-slate-900 transition-colors group-hover:text-yellow-700">
+                                                            {article.title}
+                                                        </h3>
+                                                        {article.blurb && (
+                                                            <p className="text-sm leading-relaxed text-slate-700">
+                                                                {article.blurb}
+                                                            </p>
+                                                        )}
+                                                        <p className="text-xs font-medium uppercase tracking-[0.25em] text-slate-500">
+                                                            {bylineText}
+                                                        </p>
                                                     </div>
-                                                )}
-                                            </div>
-                                            {article.byline && (
-                                                <p className="text-sm font-medium text-slate-600">
-                                                    {article.byline}
-                                                </p>
-                                            )}
-                                            {article.blurb && (
-                                                <p className="text-sm leading-relaxed text-slate-700">
-                                                    {article.blurb}
-                                                </p>
-                                            )}
-                                            {article.tags && article.tags.length > 0 && (
-                                                <div className="flex flex-wrap gap-2">
-                                                    {article.tags.map((tag) => (
-                                                        <span
-                                                            key={tag}
-                                                            className="inline-flex items-center rounded-full border border-yellow-300 bg-yellow-100 px-2.5 py-1 text-xs font-medium text-yellow-800"
-                                                        >
-                                                            {tag}
-                                                        </span>
-                                                    ))}
                                                 </div>
-                                            )}
-                                        </div>
-                                    </li>
-                                ))}
+                                            </Link>
+                                        </li>
+                                    );
+                                })}
                             </ul>
                         ) : (
                             <div className="mt-6 rounded-3xl border border-dashed border-slate-300 bg-white/60 p-10 text-center">
