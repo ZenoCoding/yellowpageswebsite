@@ -1,7 +1,6 @@
 import '../styles/global.css'
 import Router from "next/router";
 import React, {useEffect, useState} from 'react'
-import { SpeedInsights } from "@vercel/speed-insights/next";
 // import initAuth from '../initAuth' // the module you created above
 // initAuth()
 import AuthUserProvider from "../firebase/useUser";
@@ -38,10 +37,7 @@ export default function App({Component, pageProps}) {
             {loading ? (
                 <Loader/>
             ) : (
-                <>
-                    <AuthUserProvider><Component {...pageProps} /> </AuthUserProvider>
-                    <SpeedInsights />
-                </>
+                <AuthUserProvider><Component {...pageProps} /> </AuthUserProvider>
             )}
         </>
     );
