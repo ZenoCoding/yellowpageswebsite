@@ -30,6 +30,7 @@
   "scripts": {
     "dev": "next dev",
     "lint": "next lint",
+    "backfill:article-content": "node scripts/backfillArticleMarkdown.js",
     "migrate:feature": "node scripts/migrateCreativeToFeature.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

@@ -1,19 +1,17 @@
 import {Fragment} from 'react';
 import Link from 'next/link';
-import {getAdmins, getArticleContent, getAuthorDirectoryForServer, buildStaffDataForArticle, getLinkedImagesForArticle, getImagesByIds} from '../../lib/firebase';
+import {getAdmins, getArticleContent, getAuthorDirectoryForServer, buildStaffDataForArticle} from '../../lib/firebase';
 import Date from '../../components/date';
 import {makeCommaSeparatedString} from '../../lib/makeCommaSeparatedString';
 import {useRouter} from 'next/router';
 import ContentNavbar from "../../components/ContentNavbar";
 import {doc, getDoc, getFirestore, increment, serverTimestamp, updateDoc} from "firebase/firestore";
 import {getApp} from "firebase/app";
-import {getStorage} from "firebase/storage";
 import {PencilIcon} from "@heroicons/react/20/solid";
 import {useUser} from "../../firebase/useUser";
 
 const app = getApp()
 const db = getFirestore(app)
-const storage = getStorage(app)
 
 const toIsoString = (value) => {
     if (!value) {
@@ -128,7 +126,19 @@ export default function Post({articleData, admins, content}) {
                             By {authorLinks.length > 0 ? authorLinks : authorData}
                         </div>
 
-                        <div dangerouslySetInnerHTML={{__html: content.contentHtml}}/>
+                        {content?.contentHtml ? (
+                            <div dangerouslySetInnerHTML={{__html: content.contentHtml}}/>
+                        ) : (
+                            <div
+                                role="alert"
+                                className="my-8 rounded border border-yellow-300 bg-yellow-50 p-5 text-slate-800"
+                            >
+                                <h2 className="mb-2 text-xl font-semibold">Article temporarily unavailable</h2>
+                                <p>
+                                    The article text could not be loaded right now. Please check back after the site storage issue is resolved.
+                                </p>
+                            </div>
+                        )}
                         <div className="hover:underline text-blue-500 mb-5 cursor-pointer ">
                             <a onClick={() => router.back()}>← Back</a>
                         </div>
@@ -179,7 +189,20 @@ export async function getServerSideProps({params}) {
 
     const authorDirectory = await getAuthorDirectoryForServer();
     const staffData = buildStaffDataForArticle(articleData, authorDirectory);
-    const content = await getArticleContent(params.id)
+    let content;
+    try {
+        content = await getArticleContent(params.id)
+    } catch (error) {
+        console.error('Failed to load article content for article', params.id, error);
+        content = {
+            id: params.id,
+            contentHtml: '',
+            markdown: '',
+            referencedImages: [],
+            loadError: true,
+        };
+    }
+
     return {
         props: {
             articleData: {

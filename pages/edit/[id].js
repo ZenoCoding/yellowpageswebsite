@@ -1,14 +1,13 @@
 import {getAdmins, getArticleContent, getAuthorDirectoryForServer, buildStaffDataForArticle} from '../../lib/firebase'
 import {getApp} from "firebase/app"
 import {doc, getDoc, getFirestore, updateDoc, deleteDoc} from "firebase/firestore"
-import {getDownloadURL, getStorage, ref, uploadBytesResumable, deleteObject} from "firebase/storage";
+import {getStorage, ref, uploadBytesResumable, deleteObject} from "firebase/storage";
 import {remark} from 'remark';
 import {useRouter} from 'next/router';
 import {getAuth} from "firebase/auth";
 import {useUser} from "../../firebase/useUser";
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import html from 'remark-html';
-import {parseISO} from 'date-fns'
 import ContentNavbar from "../../components/ContentNavbar";
 import NoAuth from "../../components/auth/NoAuth";
 import ArticlePreview from "../../components/ArticlePreview";
@@ -442,7 +441,52 @@ export default function Post({articleData, content, admins}) {
         const file = new Blob([formData.markdown], {type: "text/plain"});
         const markdownRef = ref(storage, `articles/${articleId}.md`); // Adjust the path as needed
 
-        // Upload the Blob to Firebase Storage
+        const preparedTags = formData.tags.map((tag) => tag.trim()).filter(Boolean);
+        const preparedAuthorIds = formData.authorIds
+            .map((authorId) => authorId.trim())
+            .filter((authorId) => authorId.length > 0);
+        const preparedAuthors = preparedAuthorIds
+            .map((authorId) => authorLookup.get(authorId)?.fullName?.trim())
+            .filter((name) => typeof name === 'string' && name.length > 0);
+        const fallbackAuthorNames = formData.authors.map((author) => author.trim()).filter(Boolean);
+        const authorNamesToPersist = preparedAuthors.length > 0 ? preparedAuthors : fallbackAuthorNames;
+
+        const persistArticle = async ({storageUnavailable = false} = {}) => {
+            await updateDoc(doc(db, "articles", articleId), {
+                title: formData.title,
+                author: authorNamesToPersist,
+                authorIds: preparedAuthorIds,
+                date: formData.date,
+                blurb: formData.blurb,
+                tags: preparedTags,
+                imageUrl: formData.imageUrl,
+                featuredImageId: formData.featuredImageId || null,
+                size: formData.size,
+                path: `articles/${articleId}.md`,
+                markdown: formData.markdown,
+            });
+
+            try {
+                await syncAuthorArticleLinks({
+                    articleId,
+                    nextAuthorIds: preparedAuthorIds,
+                    previousAuthorIds: previousAuthorIdsRef.current,
+                });
+                previousAuthorIdsRef.current = preparedAuthorIds;
+            } catch (linkError) {
+                console.error('Failed to sync author links for edit', linkError);
+            }
+
+            setUploadData(storageUnavailable
+                ? 'Article saved using the Firestore backup because file storage is unavailable.'
+                : 'Upload Successful! Redirecting to the article page...');
+            if (typeof window !== 'undefined' && editDraftStorageKey) {
+                window.localStorage.removeItem(editDraftStorageKey);
+            }
+            window.open(`/posts/${articleId}`, '_blank');
+        };
+
+        // Keep Storage as the primary copy, with Firestore as an outage-safe text backup.
         const uploadTask = uploadBytesResumable(markdownRef, file);
 
         uploadTask.on('state_changed',
@@ -452,59 +496,22 @@ export default function Post({articleData, content, admins}) {
                 setUploadData('Upload is ' + progress + '% done');
                 // ...
             },
-            (error) => {
-                // Handle unsuccessful uploads
+            async (error) => {
+                if (error?.code === 'storage/quota-exceeded') {
+                    try {
+                        await persistArticle({storageUnavailable: true});
+                    } catch (fallbackError) {
+                        setErrorData(fallbackError.message);
+                        setIsUploading(false);
+                    }
+                    return;
+                }
                 setErrorData(error.message);
                 setIsUploading(false);
             },
             async () => {
-                // Handle successful uploads on complete
                 try {
-                    // Get the download URL for the uploaded markdown content
-                    const markdownDownloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                    const dateObject = parseISO(formData.date)
-
-                    const preparedTags = formData.tags.map((tag) => tag.trim()).filter(Boolean);
-                    const preparedAuthorIds = formData.authorIds
-                        .map((authorId) => authorId.trim())
-                        .filter((authorId) => authorId.length > 0);
-                    const preparedAuthors = preparedAuthorIds
-                        .map((authorId) => authorLookup.get(authorId)?.fullName?.trim())
-                        .filter((name) => typeof name === 'string' && name.length > 0);
-                    const fallbackAuthorNames = formData.authors.map((author) => author.trim()).filter(Boolean);
-                    const authorNamesToPersist = preparedAuthors.length > 0 ? preparedAuthors : fallbackAuthorNames;
-
-                    // Update Firestore document with the new metadata and content references
-                    await updateDoc(doc(db, "articles", articleId), {
-                        title: formData.title,
-                        author: authorNamesToPersist,
-                        authorIds: preparedAuthorIds,
-                        date: formData.date,
-                        blurb: formData.blurb,
-                        tags: preparedTags,
-                        imageUrl: formData.imageUrl,
-                        featuredImageId: formData.featuredImageId || null,
-                        size: formData.size,
-                        path: `articles/${articleId}.md`,
-                    });
-
-                    try {
-                        await syncAuthorArticleLinks({
-                            articleId,
-                            nextAuthorIds: preparedAuthorIds,
-                            previousAuthorIds: previousAuthorIdsRef.current,
-                        });
-                        previousAuthorIdsRef.current = preparedAuthorIds;
-                    } catch (linkError) {
-                        console.error('Failed to sync author links for edit', linkError);
-                    }
-
-                    setUploadData("Upload Successful! Redirecting to the article page...");
-                    if (typeof window !== 'undefined' && editDraftStorageKey) {
-                        window.localStorage.removeItem(editDraftStorageKey);
-                    }
-                    // Redirect to the article page in a new tab
-                    window.open(`/posts/${articleId}`, '_blank');
+                    await persistArticle();
                 } catch (error) {
                     setErrorData(error.message);
                     setIsUploading(false);

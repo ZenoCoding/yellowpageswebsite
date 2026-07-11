@@ -2,7 +2,7 @@ import Date from '../components/date'
 import {getAdmins} from '../lib/firebase'
 import {getApp} from "firebase/app"
 import {doc, getDoc, getFirestore, setDoc} from "firebase/firestore"
-import {getDownloadURL, getStorage, ref, uploadBytesResumable} from "firebase/storage";
+import {getStorage, ref, uploadBytesResumable} from "firebase/storage";
 import {remark} from 'remark';
 import {useRouter} from 'next/router';
 import {getAuth} from "firebase/auth";
@@ -560,7 +560,51 @@ export default function Upload({admins}) {
         const file = new Blob([formData.markdown], {type: "text/plain"});
         const markdownRef = ref(storage, `articles/${articleId}.md`); // Adjust the path as needed
 
-        // Upload the Blob to Firebase Storage
+        const preparedTags = formData.tags.map((tag) => tag.trim()).filter(Boolean);
+        const preparedAuthorIds = formData.authorIds
+            .map((authorId) => authorId.trim())
+            .filter((authorId) => authorId.length > 0);
+        const preparedAuthors = preparedAuthorIds
+            .map((authorId) => authorLookup.get(authorId)?.fullName?.trim())
+            .filter((name) => typeof name === 'string' && name.length > 0);
+        const fallbackAuthorNames = formData.authors.map((author) => author.trim()).filter(Boolean);
+        const authorNamesToPersist = preparedAuthors.length > 0 ? preparedAuthors : fallbackAuthorNames;
+
+        const persistArticle = async ({storageUnavailable = false} = {}) => {
+            await setDoc(doc(db, "articles", articleId), {
+                title: formData.title,
+                author: authorNamesToPersist,
+                authorIds: preparedAuthorIds,
+                date: formData.date,
+                blurb: formData.blurb,
+                tags: preparedTags,
+                imageUrl: formData.imageUrl,
+                featuredImageId: formData.featuredImageId || null,
+                size: formData.size,
+                path: `articles/${articleId}.md`,
+                markdown: formData.markdown,
+            });
+
+            try {
+                await syncAuthorArticleLinks({
+                    articleId,
+                    nextAuthorIds: preparedAuthorIds,
+                    previousAuthorIds: [],
+                });
+            } catch (linkError) {
+                console.error('Failed to sync author links for upload', linkError);
+            }
+
+            setUploadData(storageUnavailable
+                ? 'Article saved using the Firestore backup because file storage is unavailable.'
+                : 'Upload Successful!');
+            if (typeof window !== 'undefined') {
+                window.localStorage.removeItem(UPLOAD_FORM_DRAFT_KEY);
+            }
+            await router.push(`/posts/${articleId}`);
+        };
+
+        // Keep Storage as the primary copy, with Firestore as an outage-safe text backup.
         const uploadTask = uploadBytesResumable(markdownRef, file);
 
         uploadTask.on('state_changed',
@@ -569,56 +613,22 @@ export default function Upload({admins}) {
                 const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
                 setUploadData('Upload is ' + progress + '% done');
             },
-            (error) => {
-                // Handle unsuccessful uploads
+            async (error) => {
+                if (error?.code === 'storage/quota-exceeded') {
+                    try {
+                        await persistArticle({storageUnavailable: true});
+                    } catch (fallbackError) {
+                        setErrorData(fallbackError.message);
+                        setIsUploading(false);
+                    }
+                    return;
+                }
                 setErrorData(error.message);
                 setIsUploading(false);
             },
             async () => {
-                // Handle successful uploads on complete
                 try {
-                    // Get the download URL for the uploaded markdown content
-                    const markdownDownloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-
-                    const preparedTags = formData.tags.map((tag) => tag.trim()).filter(Boolean);
-                    const preparedAuthorIds = formData.authorIds
-                        .map((authorId) => authorId.trim())
-                        .filter((authorId) => authorId.length > 0);
-                    const preparedAuthors = preparedAuthorIds
-                        .map((authorId) => authorLookup.get(authorId)?.fullName?.trim())
-                        .filter((name) => typeof name === 'string' && name.length > 0);
-                    const fallbackAuthorNames = formData.authors.map((author) => author.trim()).filter(Boolean);
-                    const authorNamesToPersist = preparedAuthors.length > 0 ? preparedAuthors : fallbackAuthorNames;
-
-                    // Update Firestore document with the new metadata and content references
-                    await setDoc(doc(db, "articles", articleId), {
-                        title: formData.title,
-                        author: authorNamesToPersist,
-                        authorIds: preparedAuthorIds,
-                        date: formData.date,
-                        blurb: formData.blurb,
-                        tags: preparedTags,
-                        imageUrl: formData.imageUrl,
-                        featuredImageId: formData.featuredImageId || null,
-                        size: formData.size,
-                        path: `articles/${articleId}.md`,
-                    });
-
-                    try {
-                        await syncAuthorArticleLinks({
-                            articleId,
-                            nextAuthorIds: preparedAuthorIds,
-                            previousAuthorIds: [],
-                        });
-                    } catch (linkError) {
-                        console.error('Failed to sync author links for upload', linkError);
-                    }
-
-                    setUploadData("Upload Successful!");
-                    if (typeof window !== 'undefined') {
-                        window.localStorage.removeItem(UPLOAD_FORM_DRAFT_KEY);
-                    }
-                    await router.push(`/posts/${articleId}`);
+                    await persistArticle();
                 } catch (error) {
                     setErrorData(error.message);
                     setIsUploading(false);
