@@ -280,11 +280,6 @@ export default function AuthorPage({author, articles}) {
                             <h2 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
                                 Latest from {author.fullName}
                             </h2>
-                            {hasArticles && (
-                                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                    Updated automatically
-                                </span>
-                            )}
                         </div>
                         {hasArticles ? (
                             <ul className="mt-6 list-none space-y-5">
@@ -351,7 +346,7 @@ export default function AuthorPage({author, articles}) {
                         ) : (
                             <div className="mt-6 rounded-3xl border border-dashed border-slate-300 bg-white/60 p-10 text-center">
                                 <p className="text-sm font-medium text-slate-600">
-                                    We haven&apos;t published any articles from {author.fullName} yet. Check back soon!
+                                    No published articles yet.
                                 </p>
                             </div>
                         )}

@@ -139,14 +139,12 @@ export default function Search({ allArticleData }) {
         <div className="min-h-screen bg-white">
             <ContentNavbar />
             <main className="mx-auto max-w-5xl px-4 pb-12 pt-8 sm:px-6 lg:px-8">
-                <section className="rounded-3xl border border-yellow-200 bg-yellow-50/60 p-6 sm:p-8">
-                    <h1 className="text-3xl font-bold text-slate-900 sm:text-4xl">
-                        Find stories worth sharing
-                    </h1>
-                    <p className="mt-2 text-sm text-slate-600 sm:text-base">
+                <section className="border-y-4 border-slate-900 py-7 sm:py-9">
+                    <h1 className="text-3xl font-black text-slate-900 sm:text-5xl">Search</h1>
+                    <p className="mt-2 text-sm text-slate-600">
                         {hasActiveSearch
                             ? `Found ${resultCount} result${resultCount === 1 ? '' : 's'} for "${activePhrase}".`
-                            : `Search across ${allArticleData.length} stories. Try titles, staff names, tags, or keywords.`}
+                            : `${allArticleData.length} stories in the archive.`}
                     </p>
                     <form
                         onSubmit={handleSearchSubmit}
@@ -165,7 +163,7 @@ export default function Search({ allArticleData }) {
                                 type="search"
                                 value={searchTerm}
                                 onChange={handleSearchChange}
-                                placeholder="Search for news, people, places, and more..."
+                                placeholder="Search the archive"
                                 className="w-full rounded-xl border border-transparent bg-white py-3 pl-12 pr-4 text-base text-slate-900 shadow-sm transition focus:border-yellow-400 focus:outline-none focus:ring-2 focus:ring-yellow-300"
                             />
                         </div>
@@ -265,11 +263,10 @@ export default function Search({ allArticleData }) {
                     ) : (
                         <div className="rounded-3xl border border-dashed border-yellow-300 bg-yellow-50/80 p-10 text-center">
                             <p className="text-lg font-semibold text-slate-900">
-                                Nothing matched &ldquo;{activePhrase}&rdquo; just yet.
+                                No results for &ldquo;{activePhrase}&rdquo;.
                             </p>
                             <p className="mt-2 text-sm text-slate-600">
-                                Try a different combination of keywords, check your spelling, or explore our
-                                latest categories.
+                                Try another name, subject or phrase.
                             </p>
                             <div className="mt-6 flex flex-wrap justify-center gap-3 text-sm font-semibold text-yellow-700">
                                 {['News', 'Opinion', 'Feature', 'Sports', 'Local'].map((suggestion) => (

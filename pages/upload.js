@@ -1,7 +1,7 @@
 import Date from '../components/date'
 import {getAdmins} from '../lib/firebase'
 import {getApp} from "firebase/app"
-import {doc, getDoc, getFirestore, setDoc} from "firebase/firestore"
+import {collection, doc, getDoc, getDocs, getFirestore, serverTimestamp, setDoc, updateDoc} from "firebase/firestore"
 import {getStorage, ref, uploadBytesResumable} from "firebase/storage";
 import {remark} from 'remark';
 import {useRouter} from 'next/router';
@@ -21,6 +21,9 @@ import {useAuthors} from "../hooks/useAuthors";
 import {syncAuthorArticleLinks} from "../lib/authors";
 import matter from "gray-matter";
 import {extractImageTokenIds, replaceImageTokensWithFigures} from "../lib/articleImages";
+import ImportedMediaPanel from "../components/ImportedMediaPanel";
+import {IMPORT_MEDIA_STORAGE_KEY} from "../lib/importHandoff";
+import {getDraftReviewActions, getDraftReviewContext} from '../lib/articleAutomation';
 
 // var user_id = null;
 
@@ -133,6 +136,14 @@ export default function Upload({admins}) {
     const [uploadData, setUploadData] = useState("");
     const [errorData, setErrorData] = useState("");
     const [isUploading, setIsUploading] = useState(false);
+    const [importedMediaItems, setImportedMediaItems] = useState([]);
+    const [issues, setIssues] = useState([]);
+    const [issueId, setIssueId] = useState('');
+    const [draftStatus, setDraftStatus] = useState('needs_review');
+    const [draftContext, setDraftContext] = useState(null);
+    const [draftLoaded, setDraftLoaded] = useState(false);
+    const [saveState, setSaveState] = useState('');
+    const newsroomDraftId = typeof router.query.draftId === 'string' ? router.query.draftId : '';
 
     const [htmlData, setHtmlData] = useState("");
     const markdownTextareaRef = useRef(null);
@@ -151,6 +162,8 @@ export default function Upload({admins}) {
                 url: record.url,
                 caption: record.caption || '',
                 credit: record.credit || '',
+                creditType: record.creditType || null,
+                sourceUrl: record.sourceUrl || null,
                 altText: record.altText || '',
             });
             return next;
@@ -169,6 +182,8 @@ export default function Upload({admins}) {
                 url: typeof data.url === 'string' ? data.url : '',
                 caption: typeof data.caption === 'string' ? data.caption : '',
                 credit: typeof data.credit === 'string' ? data.credit : '',
+                creditType: typeof data.creditType === 'string' ? data.creditType : null,
+                sourceUrl: typeof data.sourceUrl === 'string' ? data.sourceUrl : null,
                 altText: typeof data.altText === 'string' ? data.altText : '',
             });
         } catch (error) {
@@ -190,44 +205,100 @@ export default function Upload({admins}) {
     );
 
     useEffect(() => {
-        if (!isAdmin || typeof window === 'undefined' || uploadDraftRestoredRef.current) {
+        if (!isAdmin || !router.isReady || typeof window === 'undefined' || uploadDraftRestoredRef.current) {
             return;
         }
         uploadDraftRestoredRef.current = true;
-        try {
-            const storedDraft = window.localStorage.getItem(UPLOAD_FORM_DRAFT_KEY);
-            if (!storedDraft) {
-                return;
+        const restoreDraft = async () => {
+            try {
+                const issueSnapshot = await getDocs(collection(db, 'issues'));
+                setIssues(issueSnapshot.docs.map((item) => ({id: item.id, ...item.data()})));
+                if (newsroomDraftId) {
+                    const snapshot = await getDoc(doc(db, 'articleDrafts', newsroomDraftId));
+                    if (!snapshot.exists()) throw new Error('This newsroom draft no longer exists.');
+                    const data = snapshot.data() || {};
+                    setFormData((previous) => ({
+                        ...previous,
+                        title: data.title || '',
+                        authors: Array.isArray(data.authors) ? data.authors : [],
+                        authorIds: Array.isArray(data.authorIds) ? data.authorIds : [],
+                        date: data.date || data.publicationDate || '',
+                        blurb: data.blurb || '',
+                        tags: Array.isArray(data.tags) ? data.tags : [],
+                        imageUrl: data.imageUrl || '',
+                        featuredImageId: data.featuredImageId || '',
+                        size: data.size || 'normal',
+                        markdown: data.markdown || '',
+                    }));
+                    setImportedMediaItems(Array.isArray(data.mediaItems) ? data.mediaItems : []);
+                    setIssueId(data.issueId || '');
+                    setDraftStatus(data.status || 'needs_review');
+                    setDraftContext({source: data.source || null, ai: data.ai || null, blockers: data.blockers || []});
+                    return;
+                }
+                const storedDraft = window.localStorage.getItem(UPLOAD_FORM_DRAFT_KEY);
+                if (storedDraft) {
+                    const parsed = JSON.parse(storedDraft);
+                    if (parsed && typeof parsed === 'object') setFormData((previous) => ({...previous, ...parsed}));
+                }
+                const storedMedia = window.localStorage.getItem(IMPORT_MEDIA_STORAGE_KEY);
+                const parsedMedia = storedMedia ? JSON.parse(storedMedia) : [];
+                setImportedMediaItems(Array.isArray(parsedMedia) ? parsedMedia : []);
+            } catch (error) {
+                setErrorData(error?.message || 'Failed to restore the newsroom draft.');
+            } finally {
+                setDraftLoaded(true);
             }
-            const parsed = JSON.parse(storedDraft);
-            if (parsed && typeof parsed === 'object') {
-                setFormData((previous) => ({
-                    ...previous,
-                    ...parsed,
-                }));
+        };
+        restoreDraft();
+    }, [isAdmin, newsroomDraftId, router.isReady]);
+
+    const handleImportedMediaChange = useCallback((items) => {
+        const nextItems = Array.isArray(items) ? items : [];
+        setImportedMediaItems(nextItems);
+        if (!newsroomDraftId && typeof window !== 'undefined') {
+            if (nextItems.length > 0) {
+                window.localStorage.setItem(IMPORT_MEDIA_STORAGE_KEY, JSON.stringify(nextItems));
+            } else {
+                window.localStorage.removeItem(IMPORT_MEDIA_STORAGE_KEY);
             }
-        } catch (error) {
-            console.error('Failed to restore upload draft', error);
         }
-    }, [isAdmin]);
+    }, [newsroomDraftId]);
 
     useEffect(() => {
-        if (!isAdmin || typeof window === 'undefined') {
+        if (!isAdmin || !draftLoaded || typeof window === 'undefined') {
             return;
         }
         if (uploadDraftTimeoutRef.current) {
             clearTimeout(uploadDraftTimeoutRef.current);
         }
-        uploadDraftTimeoutRef.current = window.setTimeout(() => {
-            const payload = JSON.stringify(formData);
-            window.localStorage.setItem(UPLOAD_FORM_DRAFT_KEY, payload);
+        uploadDraftTimeoutRef.current = window.setTimeout(async () => {
+            if (newsroomDraftId) {
+                setSaveState('Saving…');
+                try {
+                    await updateDoc(doc(db, 'articleDrafts', newsroomDraftId), {
+                        ...formData,
+                        issueId: issueId || null,
+                        status: draftStatus,
+                        mediaItems: importedMediaItems,
+                        updatedAt: serverTimestamp(),
+                    });
+                    setSaveState('Saved');
+                } catch (error) {
+                    setSaveState('Save failed');
+                    console.error('Failed to save newsroom draft', error);
+                }
+                return;
+            }
+            window.localStorage.setItem(UPLOAD_FORM_DRAFT_KEY, JSON.stringify(formData));
+            setSaveState('Saved in this browser');
         }, 800);
         return () => {
             if (uploadDraftTimeoutRef.current) {
                 clearTimeout(uploadDraftTimeoutRef.current);
             }
         };
-    }, [formData, isAdmin]);
+    }, [draftLoaded, draftStatus, formData, importedMediaItems, isAdmin, issueId, newsroomDraftId]);
 
     useEffect(() => {
         if (!isAdmin) {
@@ -400,6 +471,15 @@ export default function Upload({admins}) {
         }));
     };
 
+    const handleIssueChange = (event) => {
+        const nextIssueId = event.target.value;
+        const selectedIssue = issues.find((issue) => issue.id === nextIssueId);
+        setIssueId(nextIssueId);
+        if (selectedIssue?.targetPublicationDate) {
+            setFormData((previous) => ({...previous, date: selectedIssue.targetPublicationDate}));
+        }
+    };
+
     const updateMarkdown = useCallback((markdownValue) => {
         setFormData((prevFormData) => ({
             ...prevFormData,
@@ -491,6 +571,9 @@ export default function Upload({admins}) {
     if (!isAdmin) {
         return <NoAuth permission={true}/>;
     }
+    if (newsroomDraftId && !draftLoaded) {
+        return <div className="min-h-screen bg-slate-50"><ContentNavbar/><div className="mx-auto max-w-6xl px-5 py-20 text-sm text-slate-500">Loading newsroom draft…</div></div>;
+    }
 
     const handleSetFeaturedImage = (image) => {
         setFormData((prevFormData) => ({
@@ -572,6 +655,7 @@ export default function Upload({admins}) {
 
         const persistArticle = async ({storageUnavailable = false} = {}) => {
             await setDoc(doc(db, "articles", articleId), {
+                status: 'published',
                 title: formData.title,
                 author: authorNamesToPersist,
                 authorIds: preparedAuthorIds,
@@ -581,9 +665,23 @@ export default function Upload({admins}) {
                 imageUrl: formData.imageUrl,
                 featuredImageId: formData.featuredImageId || null,
                 size: formData.size,
+                issueId: issueId || null,
+                publishedAt: serverTimestamp(),
                 path: `articles/${articleId}.md`,
                 markdown: formData.markdown,
             });
+
+            if (newsroomDraftId) {
+                await updateDoc(doc(db, 'articleDrafts', newsroomDraftId), {
+                    ...formData,
+                    issueId: issueId || null,
+                    mediaItems: importedMediaItems,
+                    status: 'published',
+                    publishedArticleId: articleId,
+                    publishedAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                });
+            }
 
             try {
                 await syncAuthorArticleLinks({
@@ -600,6 +698,7 @@ export default function Upload({admins}) {
                 : 'Upload Successful!');
             if (typeof window !== 'undefined') {
                 window.localStorage.removeItem(UPLOAD_FORM_DRAFT_KEY);
+                window.localStorage.removeItem(IMPORT_MEDIA_STORAGE_KEY);
             }
             await router.push(`/posts/${articleId}`);
         };
@@ -638,12 +737,31 @@ export default function Upload({admins}) {
     };
 
     // JSX for the form within the Post component
+    const reviewActions = getDraftReviewActions(draftContext || {});
+    const reviewContext = getDraftReviewContext(draftContext || {});
     return (
-        <div className="m-auto my-10 px-5 max-w-6xl">
+        <div className="min-h-screen bg-slate-50 pb-16 text-slate-900">
             <ContentNavbar/>
-            <h1 className="text-3xl font-bold mb-3">Upload Article</h1>
-            <div className="mt-6 lg:mt-10 lg:flex lg:items-start lg:gap-10">
+            <header className="border-b border-slate-200 bg-white">
+                <div className="mx-auto max-w-7xl px-5 py-10 sm:px-8 lg:px-10">
+                    <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                        <div>
+                            <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-600">{newsroomDraftId ? 'Newsroom draft' : 'New story'}</p>
+                            <h1 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">{newsroomDraftId ? formData.title || 'Untitled newsroom draft' : 'Create an article'}</h1>
+                        </div>
+                        <div className="flex items-center gap-3"><span className="text-xs font-semibold text-slate-500">{saveState}</span>{newsroomDraftId && <button type="button" onClick={() => router.push('/admin/newsroom')} className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-bold hover:border-slate-900">Back to queue</button>}</div>
+                    </div>
+                </div>
+            </header>
+            <div className="mx-auto mt-8 max-w-7xl px-5 sm:px-8 lg:flex lg:items-start lg:gap-10 lg:px-10">
                 <form onSubmit={handleSubmit} autoComplete="off" className="space-y-6 lg:w-1/2">
+                    {newsroomDraftId && reviewActions.length > 0 && <section className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-5"><p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-700">Needs your attention</p><h2 className="mt-2 text-xl font-bold">Address these items</h2><ul className="mt-3 space-y-2 text-sm text-slate-800">{reviewActions.map((action) => <li key={action} className="flex gap-2"><span className="font-bold text-amber-600">•</span><span>{action}</span></li>)}</ul>{reviewContext.length > 0 && <div className="mt-4 border-t border-amber-200 pt-3"><p className="text-xs font-bold uppercase tracking-wide text-amber-800">Why the automation stopped</p><ul className="mt-2 space-y-1 text-sm text-slate-600">{reviewContext.map((note) => <li key={note}>{note}</li>)}</ul></div>}<p className="mt-4 text-xs leading-5 text-slate-500">After fixing the article, publish it here or return to the issue and run Recheck automation.</p></section>}
+                    {draftContext?.source && <section className="rounded-2xl border border-amber-200 bg-yellow-50 p-5"><p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-700">Imported source</p><div className="mt-2 flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-bold">{draftContext.source.rootName || draftContext.source.sourceName || 'Google Drive submission'}</h2><p className="mt-1 text-sm text-slate-600">{draftContext.source.tabTitle || draftContext.source.documentName || 'Prepared source copy'}</p></div>{draftContext.source.url && <a href={draftContext.source.url} target="_blank" rel="noreferrer" className="text-sm font-bold text-indigo-700 underline">Open original</a>}</div>{draftContext.ai?.warnings?.length > 0 && <details className="mt-4 border-t border-amber-200 pt-3"><summary className="cursor-pointer text-sm font-bold text-amber-900">Review notes ({draftContext.ai.warnings.length})</summary><ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-amber-900">{draftContext.ai.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></details>}</section>}
+
+                    <section className={`grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm ${newsroomDraftId ? 'sm:grid-cols-2' : ''}`}>
+                        {newsroomDraftId && <label className="text-sm font-bold text-slate-700">Editorial stage<select value={draftStatus} onChange={(event) => setDraftStatus(event.target.value)} className="mt-2 block w-full rounded-md border border-slate-300 p-2.5 text-sm font-normal"><option value="needs_review">Needs review</option><option value="copy_ready">Copy ready</option><option value="media_ready">Media ready</option><option value="ready">Ready to publish</option><option value="incomplete">Incomplete</option><option value="rejected">Rejected</option></select></label>}
+                        <label className="text-sm font-bold text-slate-700">Issue<select value={issueId} onChange={handleIssueChange} className="mt-2 block w-full rounded-md border border-slate-300 p-2.5 text-sm font-normal"><option value="">No issue</option>{issues.filter((issue) => issue.status !== 'archived').map((issue) => <option key={issue.id} value={issue.id}>{issue.name}{issue.schoolYear ? ` · ${issue.schoolYear}` : ''}{issue.volumeNumber ? ` · Vol. ${issue.volumeNumber}` : ''}{issue.issueNumber ? `, No. ${issue.issueNumber}` : ''}</option>)}</select></label>
+                    </section>
                     <div>
                         <label htmlFor="title" className="block text-sm font-medium text-gray-700">
                             Title
@@ -662,7 +780,7 @@ export default function Upload({admins}) {
 
                     <div>
                         <label htmlFor="authors" className="block text-sm font-medium text-gray-700">
-                            Staff Credits
+                            Byline
                         </label>
                         <AuthorMultiSelect
                             id="authors"
@@ -670,7 +788,6 @@ export default function Upload({admins}) {
                             value={formData.authorIds}
                             onChange={handleAuthorIdsChange}
                             placeholder={authorsLoading ? 'Loading staff directory…' : 'Search staff by name'}
-                            helperText="Pick bylines from the staff directory. Alumni or departed staff appear with an inactive badge."
                             disabled={authorsLoading}
                         />
                     </div>
@@ -752,7 +869,6 @@ export default function Upload({admins}) {
                             onChange={handleTagsChange}
                             options={DEFAULT_TAG_OPTIONS}
                             placeholder="Search or type a tag"
-                            helperText="Pick from popular tags or type to create new ones."
                             createLabel={(token) => `Add tag "${token}"`}
                             emptyStateText="No matching tags"
                         />
@@ -779,6 +895,15 @@ export default function Upload({admins}) {
                         )}
                     </div>
 
+                    <ImportedMediaPanel
+                        items={importedMediaItems}
+                        articleId={draftArticleId}
+                        onItemsChange={handleImportedMediaChange}
+                        onSetFeatured={handleSetFeaturedImage}
+                        onInsertIntoMarkdown={handleInsertImageMarkdown}
+                        onImageRecordUpdate={handleImageRecordUpdate}
+                    />
+
                     <ImageUploadAssistant
                         onSetFeatured={handleSetFeaturedImage}
                         onInsertIntoMarkdown={handleInsertImageMarkdown}
@@ -788,7 +913,7 @@ export default function Upload({admins}) {
 
                     <div>
                         <label htmlFor="size" className="block text-sm font-medium text-gray-700">
-                            Article Size
+                            Front-page size
                         </label>
                         <select
                             id="size"
@@ -832,7 +957,7 @@ export default function Upload({admins}) {
                     </div>
 
                     <a href={"https://docs.google.com/document/d/1_lNHBxtpaBa1JRqrbapmCj_L_k-yfSsTSkgGp_1pnL0/edit"}
-                       className="underline italic text-gray-500">Confused?</a>
+                       className="text-sm text-slate-500 underline">Formatting guide</a>
 
                     <div className="flex items-center justify-between flex-wrap gap-3">
                         <button
@@ -840,7 +965,7 @@ export default function Upload({admins}) {
                             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                             disabled={isUploading}
                         >
-                            {isUploading ? 'Uploading...' : 'Upload Article'}
+                            {isUploading ? 'Publishing…' : 'Publish article'}
                         </button>
                         {errorData && <p className="text-red-500">{errorData}</p>}
                         {uploadData && <p className="text-green-500">{uploadData}</p>}

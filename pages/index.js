@@ -462,16 +462,7 @@ export default function Home({ allArticleData, admins }) {
 
     const renderHeadlineStack = (articles) => {
         if (!articles || articles.length === 0) {
-            return (
-                <aside className="border-t border-slate-200 pt-6 lg:border-0 lg:pt-0">
-                    <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
-                        Latest Headlines
-                    </p>
-                    <p className="mt-4 text-sm text-slate-600">
-                        More news coming soon.
-                    </p>
-                </aside>
-            );
+            return null;
         }
 
         return (
@@ -644,11 +635,7 @@ export default function Home({ allArticleData, admins }) {
                             );
                         })}
                     </div>
-                ) : (
-                    <p className="text-sm text-slate-500">
-                        More opinion coming soon.
-                    </p>
-                )}
+                ) : null}
             </section>
         );
     };
@@ -665,25 +652,7 @@ export default function Home({ allArticleData, admins }) {
         const hasArticles = Array.isArray(articles) && articles.length > 0;
 
         if (!hasArticles) {
-            return (
-                <section className="space-y-4">
-                    {renderCategoryHeader(title)}
-                    <p className="text-sm text-slate-500">
-                        More {title.toLowerCase()} coming soon.
-                    </p>
-                    {categorySlug && (
-                        <div>
-                            <Link
-                                href={`/category/${categorySlug}`}
-                                className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.25em] text-slate-700 transition-colors duration-200 hover:text-yellow-700"
-                            >
-                                More {title}
-                                <span aria-hidden="true">→</span>
-                            </Link>
-                        </div>
-                    )}
-                </section>
-            );
+            return null;
         }
 
         const [leadArticle, ...rest] = articles;
@@ -789,11 +758,7 @@ export default function Home({ allArticleData, admins }) {
                             </>
                         ) : (
                             <>
-                                <div className="flex-1">
-                                    <p className="text-sm text-slate-500">
-                                        More {title.toLowerCase()} coming soon.
-                                    </p>
-                                </div>
+                                <div className="flex-1"/>
                                 {categorySlug && (
                                     <div className="mt-4">
                                         <Link
@@ -907,11 +872,7 @@ export default function Home({ allArticleData, admins }) {
                             </div>
                         )}
                     </>
-                ) : (
-                    <p className="mt-6 text-sm text-slate-500">
-                        More {title.toLowerCase()} coming soon.
-                    </p>
-                )}
+                ) : null}
             </section>
         );
     };

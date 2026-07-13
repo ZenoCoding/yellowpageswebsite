@@ -10,32 +10,32 @@ const SECTION_METADATA = {
     news: {
         title: 'News',
         heroLabel: 'News Desk',
-        description: 'Reporting on the policy shifts, campus happenings, and announcements shaping BASIS Independent Fremont.',
+        description: 'News from BASIS Independent Fremont and its community.',
     },
     feature: {
         title: 'Feature',
         heroLabel: 'Feature Spotlight',
-        description: 'Long-form, deeply reported storytelling that adds dimension to student life and the broader community.',
+        description: 'Reported stories from campus and beyond.',
     },
     opinion: {
         title: 'Opinion',
         heroLabel: 'Editorial Board',
-        description: 'Arguments, ideas, and perspectives from the Yellow Pages opinion desk.',
+        description: 'Arguments and ideas from Yellow Pages writers.',
     },
     sports: {
         title: 'Sports',
         heroLabel: 'Sports Beat',
-        description: 'Scores, strategy, and behind-the-scenes looks at BASIS Independent Fremont athletics.',
+        description: 'BASIS Independent Fremont athletics.',
     },
     ae: {
         title: 'A&E',
         heroLabel: 'Arts & Entertainment',
-        description: 'Spotlighting creativity across BASIS Independent Fremont — concerts, galleries, films, and more.',
+        description: 'Arts and culture at BASIS Independent Fremont.',
     },
     hob: {
         title: 'Humans of BASIS',
         heroLabel: 'Profiles',
-        description: 'Personal spotlights on the students, teachers, and staff who make BASIS Independent Fremont unique.',
+        description: 'Profiles of students, teachers and staff.',
     },
 };
 
@@ -626,9 +626,6 @@ export default function SectionPage({ sectionId, sectionName, sectionDescription
                                 <h1 className="text-4xl font-black tracking-tight text-slate-900 sm:text-5xl">
                                     {sectionName}
                                 </h1>
-                                <p className="mt-4 max-w-3xl text-base leading-relaxed text-slate-600">
-                                    {sectionDescription}
-                                </p>
                             </div>
                         </div>
                         {hasArticles && (

@@ -9,6 +9,7 @@ import {doc, getDoc, getFirestore, increment, serverTimestamp, updateDoc} from "
 import {getApp} from "firebase/app";
 import {PencilIcon} from "@heroicons/react/20/solid";
 import {useUser} from "../../firebase/useUser";
+import {formatIssueNumber} from '../../lib/newsroom';
 
 const app = getApp()
 const db = getFirestore(app)
@@ -65,7 +66,7 @@ const interleaveAuthorLinks = (links) => {
     return result;
 };
 
-export default function Post({articleData, admins, content}) {
+export default function Post({articleData, admins, content, issue}) {
     const staffNames = Array.isArray(articleData?.staffNames) && articleData.staffNames.length > 0
         ? articleData.staffNames
         : Array.isArray(articleData?.author)
@@ -125,6 +126,16 @@ export default function Post({articleData, admins, content}) {
                         <div className="text-gray-500 mb-4">
                             By {authorLinks.length > 0 ? authorLinks : authorData}
                         </div>
+                        {issue && <div className="mb-5 text-sm text-slate-500"><Link href={`/issues/${encodeURIComponent(issue.slug)}`} className="font-medium text-slate-600 underline decoration-yellow-400 decoration-2 underline-offset-4 transition hover:text-slate-900">{formatIssueNumber(issue) || 'View issue'}</Link></div>}
+
+                        {(articleData.featuredImage?.url || articleData.imageUrl) && <figure className="mb-8 overflow-hidden rounded-sm bg-slate-100">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={articleData.featuredImage?.url || articleData.imageUrl} alt={articleData.featuredImage?.altText || articleData.title || 'Article image'} className="h-auto w-full object-cover"/>
+                            {(articleData.featuredImage?.caption || articleData.featuredImage?.credit) && <figcaption className="px-1 py-3 text-sm leading-5 text-slate-600">
+                                {articleData.featuredImage?.caption && <span>{articleData.featuredImage.caption}</span>}
+                                {articleData.featuredImage?.credit && <span className="ml-2 text-xs uppercase tracking-wide text-slate-500">{articleData.featuredImage.sourceUrl ? 'Source: ' : 'Photo by '}{articleData.featuredImage.sourceUrl ? <a href={articleData.featuredImage.sourceUrl} target="_blank" rel="noreferrer" className="underline">{articleData.featuredImage.credit}</a> : articleData.featuredImage.credit}</span>}
+                            </figcaption>}
+                        </figure>}
 
                         {content?.contentHtml ? (
                             <div dangerouslySetInnerHTML={{__html: content.contentHtml}}/>
@@ -184,8 +195,51 @@ export async function getServerSideProps({params}) {
     const serializableArticle = {
         ...articleData,
         date: toIsoString(articleData.date) || articleData.date || null,
+        publishedAt: toIsoString(articleData.publishedAt),
         lastViewedAt: toIsoString(articleData.lastViewedAt),
     };
+
+    if (typeof articleData.featuredImageId === 'string' && articleData.featuredImageId) {
+        try {
+            const imageSnapshot = await getDoc(doc(db, 'images', articleData.featuredImageId));
+            if (imageSnapshot.exists()) {
+                const image = imageSnapshot.data() || {};
+                serializableArticle.featuredImage = {
+                    id: imageSnapshot.id,
+                    url: typeof image.url === 'string' ? image.url : null,
+                    caption: typeof image.caption === 'string' ? image.caption : '',
+                    credit: typeof image.credit === 'string' ? image.credit : '',
+                    altText: typeof image.altText === 'string' ? image.altText : '',
+                    sourceUrl: typeof image.sourceUrl === 'string' ? image.sourceUrl : null,
+                };
+            }
+        } catch (error) {
+            console.error('Failed to load featured image for article', params.id, error);
+        }
+    }
+
+    let issue = null;
+    if (typeof articleData.issueId === 'string' && articleData.issueId) {
+        try {
+            const issueSnapshot = await getDoc(doc(db, 'issues', articleData.issueId));
+            if (issueSnapshot.exists()) {
+                const issueData = issueSnapshot.data() || {};
+                const issueIsPublic = issueData.status === 'published' || (issueData.status === 'archived' && issueData.publishedAt);
+                if (issueIsPublic && typeof issueData.slug === 'string' && issueData.slug) {
+                    issue = {
+                        id: issueSnapshot.id,
+                        name: typeof issueData.name === 'string' ? issueData.name : 'Untitled issue',
+                        slug: issueData.slug,
+                        schoolYear: typeof issueData.schoolYear === 'string' ? issueData.schoolYear : '',
+                        volumeNumber: Number.isInteger(issueData.volumeNumber) ? issueData.volumeNumber : null,
+                        issueNumber: Number.isInteger(issueData.issueNumber) ? issueData.issueNumber : null,
+                    };
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load issue for article', params.id, error);
+        }
+    }
 
     const authorDirectory = await getAuthorDirectoryForServer();
     const staffData = buildStaffDataForArticle(articleData, authorDirectory);
@@ -213,7 +267,8 @@ export async function getServerSideProps({params}) {
                 authorIds: staffData.authorIds,
             },
             admins: (await getAdmins()).admins,
-            content
+            content,
+            issue,
         }
     }
 }

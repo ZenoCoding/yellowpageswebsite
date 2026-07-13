@@ -130,7 +130,7 @@ export default function SearchBar({ className, isIconOnly = true }) {
                             <input
                                 id="navbar-search"
                                 type="text"
-                                placeholder="Search for anything..."
+                                placeholder="Search the archive"
                                 value={searchTerm}
                                 onChange={handleSearchChange}
                                 onKeyDown={handleKeyDown}

@@ -795,11 +795,7 @@ export default function AuthorAdminPage({admins}) {
     return (
         <div className="m-auto my-10 max-w-6xl px-5">
             <ContentNavbar/>
-            <h1 className="mt-6 text-3xl font-bold">Staff Management</h1>
-            <p className="mt-2 text-sm text-slate-600">
-                Maintain a canonical staff list so uploaders can pick from verified contributors. Profiles automatically
-                move to alumni after June 30 of their graduation year—use the departed toggle when someone leaves early.
-            </p>
+            <h1 className="mt-6 text-3xl font-bold">Staff</h1>
 
             <div className="mt-8 grid gap-8 lg:grid-cols-3">
                 <section className="lg:col-span-2 space-y-6">
@@ -822,11 +818,7 @@ export default function AuthorAdminPage({admins}) {
                     <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4">
                         <div className="flex items-start justify-between gap-3">
                             <div>
-                                <h3 className="text-base font-semibold text-slate-800">Backfill from existing articles</h3>
-                                <p className="mt-1 text-xs text-slate-600">
-                                    We scan article tags and bylines for proper names.
-                                    Promote a candidate to pre-fill the form and auto-link the matching articles.
-                                </p>
+                                <h3 className="text-base font-semibold text-slate-800">Unlinked bylines</h3>
                             </div>
                             <button
                                 type="button"
@@ -901,7 +893,7 @@ export default function AuthorAdminPage({admins}) {
                 <section className="lg:col-span-1">
                     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
                         <h2 className="text-lg font-semibold text-slate-800">
-                            {formMode === 'edit' ? 'Edit Staff Profile' : 'Add Staff Member'}
+                            {formMode === 'edit' ? 'Edit profile' : 'Add staff member'}
                         </h2>
                         <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
                             <div>

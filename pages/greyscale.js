@@ -458,15 +458,9 @@ export default function GreyscaleToolPage() {
                     <div className="grid gap-8 lg:grid-cols-2">
                         <div className="space-y-6">
                             <div>
-                                <p className="text-sm font-semibold uppercase tracking-widest text-yellow-600">
-                                    Tools
-                                </p>
-                                <h1 className="mt-2 text-3xl font-extrabold text-slate-900 sm:text-4xl">
+                                <h1 className="text-3xl font-extrabold text-slate-900 sm:text-4xl">
                                     Greyscale image converter
                                 </h1>
-                                <p className="mt-3 text-base text-slate-600">
-                                    Upload JPGs or PNGs and get true luminance greyscale JPGs—done entirely in your browser.
-                                </p>
                             </div>
                             <div
                                 onDrop={handleDrop}
@@ -541,10 +535,6 @@ export default function GreyscaleToolPage() {
                                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
                                     Batch download
                                 </p>
-                                <p className="mt-2 text-sm text-slate-600">
-                                    Download every converted JPG at once. We package everything locally into a zip so
-                                    nothing leaves your browser.
-                                </p>
                                 <button
                                     type="button"
                                     onClick={handleBatchDownload}
@@ -553,10 +543,6 @@ export default function GreyscaleToolPage() {
                                 >
                                     {isBatchDownloading ? 'Preparing zip…' : 'Download all as zip'}
                                 </button>
-                                <p className="mt-2 text-xs text-slate-500">
-                                    Individual downloads stay available in each card below if you prefer to pick and
-                                    choose.
-                                </p>
                             </div>
                         </div>
                     </div>
@@ -566,10 +552,6 @@ export default function GreyscaleToolPage() {
                     <div className="mb-4 flex items-center justify-between">
                         <div>
                             <h2 className="text-2xl font-bold text-slate-900">Conversion queue</h2>
-                            <p className="text-sm text-slate-500">
-                                Preview the original next to the greyscale export, then download or remove files one by
-                                one.
-                            </p>
                         </div>
                         {totalItems > 0 && (
                             <span className="rounded-full border border-slate-200 bg-white px-4 py-1 text-sm font-semibold text-slate-600">
@@ -580,9 +562,6 @@ export default function GreyscaleToolPage() {
                     {items.length === 0 ? (
                         <div className="rounded-3xl border-2 border-dashed border-slate-200 bg-white px-8 py-16 text-center text-slate-500">
                             <p className="text-lg font-semibold text-slate-700">No images yet</p>
-                            <p className="mt-2 text-sm">
-                                Use the panel above to upload JPGs or PNGs and we will list them here with live previews.
-                            </p>
                         </div>
                     ) : (
                         <div className="grid gap-6 lg:grid-cols-2">

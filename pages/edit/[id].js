@@ -1,6 +1,6 @@
 import {getAdmins, getArticleContent, getAuthorDirectoryForServer, buildStaffDataForArticle} from '../../lib/firebase'
 import {getApp} from "firebase/app"
-import {doc, getDoc, getFirestore, updateDoc, deleteDoc} from "firebase/firestore"
+import {collection, doc, getDoc, getDocs, getFirestore, updateDoc, deleteDoc} from "firebase/firestore"
 import {getStorage, ref, uploadBytesResumable, deleteObject} from "firebase/storage";
 import {remark} from 'remark';
 import {useRouter} from 'next/router';
@@ -47,7 +47,7 @@ const storage = getStorage(app)
 
 const DEFAULT_TAG_OPTIONS = ['news', 'feature', 'opinion', 'sports', 'ae', 'hob', 'creative', 'student life', 'events'];
 const EDIT_FORM_DRAFT_PREFIX = 'yellowpages-edit-draft-';
-export default function Post({articleData, content, admins}) {
+export default function Post({articleData, content, admins, issues}) {
     const auth = getAuth();
     const {user} = useUser();
     const router = useRouter();
@@ -119,6 +119,7 @@ export default function Post({articleData, content, admins}) {
         tags: initialTags,
         imageUrl: articleData.imageUrl || '',
         featuredImageId: typeof articleData.featuredImageId === 'string' ? articleData.featuredImageId : '',
+        issueId: typeof articleData.issueId === 'string' ? articleData.issueId : '',
         size: articleData.size || 'normal',
         markdown: content.markdown,
     });
@@ -339,10 +340,17 @@ export default function Post({articleData, content, admins}) {
     // Form input change handlers
     const handleChange = (e) => {
         const { name, value } = e.target;
-        setFormData((prevFormData) => ({
-            ...prevFormData,
-            [name]: value,
-        }));
+        setFormData((prevFormData) => {
+            if (name === 'issueId') {
+                const selectedIssue = (issues || []).find((issue) => issue.id === value);
+                return {
+                    ...prevFormData,
+                    issueId: value,
+                    date: selectedIssue?.targetPublicationDate || prevFormData.date,
+                };
+            }
+            return {...prevFormData, [name]: value};
+        });
     };
 
     const updateMarkdown = (markdownValue) => {
@@ -461,6 +469,7 @@ export default function Post({articleData, content, admins}) {
                 tags: preparedTags,
                 imageUrl: formData.imageUrl,
                 featuredImageId: formData.featuredImageId || null,
+                issueId: formData.issueId || null,
                 size: formData.size,
                 path: `articles/${articleId}.md`,
                 markdown: formData.markdown,
@@ -631,6 +640,15 @@ export default function Post({articleData, content, admins}) {
                         />
                     </div>
 
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <label htmlFor="issueId" className="block text-sm font-semibold text-slate-800">Issue / edition</label>
+                        <select id="issueId" name="issueId" value={formData.issueId} onChange={handleChange} className="mt-2 block w-full rounded-md border border-slate-300 bg-white p-2.5 text-sm shadow-sm">
+                            <option value="">Continuous online publication — no issue</option>
+                            {(issues || []).filter((issue) => issue.status !== 'archived' || issue.id === formData.issueId).map((issue) => <option key={issue.id} value={issue.id}>{issue.name}{issue.schoolYear ? ` · ${issue.schoolYear}` : ''}{issue.volumeNumber ? ` · Vol. ${issue.volumeNumber}` : ''}{issue.issueNumber ? `, No. ${issue.issueNumber}` : ''}</option>)}
+                        </select>
+                        <p className="mt-2 text-xs leading-5 text-slate-500">Selecting an issue applies its publication date to this article by default.</p>
+                    </div>
+
                     <div>
                         <label htmlFor="tags" className="block text-sm font-medium text-gray-700">
                             Tags
@@ -761,6 +779,19 @@ export async function getServerSideProps({params}) {
     const authorDirectory = await getAuthorDirectoryForServer();
     const staffData = buildStaffDataForArticle(serializableArticleData, authorDirectory);
     const content = await getArticleContent(params.id)
+    const issueSnapshot = await getDocs(collection(db, 'issues'));
+    const issues = issueSnapshot.docs.map((issueDocument) => {
+        const issue = issueDocument.data() || {};
+        return {
+            id: issueDocument.id,
+            name: typeof issue.name === 'string' ? issue.name : 'Untitled issue',
+            schoolYear: typeof issue.schoolYear === 'string' ? issue.schoolYear : '',
+            volumeNumber: Number.isInteger(issue.volumeNumber) ? issue.volumeNumber : null,
+            issueNumber: Number.isInteger(issue.issueNumber) ? issue.issueNumber : null,
+            status: typeof issue.status === 'string' ? issue.status : 'planning',
+            targetPublicationDate: typeof issue.targetPublicationDate === 'string' ? issue.targetPublicationDate : '',
+        };
+    });
     const admins = await getAdmins();
     const ret = admins.admins;
     return {
@@ -773,7 +804,8 @@ export async function getServerSideProps({params}) {
                 authorIds: staffData.authorIds,
             },
             content: content,
-            admins: ret
+            admins: ret,
+            issues,
         }
     }
 }

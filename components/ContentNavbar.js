@@ -4,17 +4,9 @@ import { useRouter } from 'next/router';
 import { Bars3Icon } from '@heroicons/react/24/outline';
 import { LogoIcon } from './Logo';
 import SearchBar from "./SearchBar";
+import {PUBLIC_NAVIGATION} from '../lib/siteNavigation';
 
-const navigation = [
-    { name: 'Local', href: '/category/local'},
-    { name: 'A&E', href: '/category/ae' },
-    { name: 'News', href: '/category/news' },
-    { name: 'Opinion', href: '/category/opinion' },
-    { name: 'Feature', href: '/category/feature' },
-    { name: 'Sports', href: '/category/sports' },
-    { name: 'Humans of BASIS', href: '/category/hob' },
-    { name: 'About Us', href: '/about' }
-];
+const navigation = PUBLIC_NAVIGATION;
 
 export default function ContentNavbar() {
     const [isSearchOverlayOpen, setIsSearchOverlayOpen] = useState(false);

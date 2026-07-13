@@ -5,16 +5,9 @@ import Logo from './Logo.js';
 import Link from "next/link";
 import { useRouter } from 'next/router';
 import SearchBar from "./SearchBar";
+import {PUBLIC_NAVIGATION} from '../lib/siteNavigation';
 
-const navigation = [
-    {name: 'News', href: '/category/news'},
-    {name: 'Feature', href: '/category/feature'},
-    {name: 'Opinion', href: '/category/opinion'},
-    {name: 'A&E', href: '/category/ae'},
-    {name: 'Sports', href: '/category/sports'},
-    {name: 'Humans of BASIS', href: '/category/hob'},
-    {name: 'About Us', href: '/about'}
-];
+const navigation = PUBLIC_NAVIGATION.filter((item) => !item.contentOnly);
 
 export default function Navbar() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
