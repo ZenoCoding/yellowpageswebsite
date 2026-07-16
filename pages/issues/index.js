@@ -59,7 +59,7 @@ export default function IssueArchive({issues}) {
                     <div className="mt-10 grid gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
                         {issues.map((issue) => {
                             const numbering = issueNumber(issue);
-                            const published = formatDate(issue.publishedAt || issue.targetPublicationDate);
+                            const published = formatDate(issue.targetPublicationDate || issue.publishedAt);
                             return (
                                 <article key={issue.id} className="group border-t-4 border-slate-900 pt-5">
                                     <Link href={`/issues/${encodeURIComponent(issue.slug || issue.id)}`} className="block">
@@ -131,8 +131,8 @@ export async function getServerSideProps() {
         })
         .filter((issue) => issue.status === 'published' || (issue.status === 'archived' && issue.publishedAt))
         .sort((a, b) => {
-            const aDate = dateFromValue(a.publishedAt || a.targetPublicationDate)?.getTime() || 0;
-            const bDate = dateFromValue(b.publishedAt || b.targetPublicationDate)?.getTime() || 0;
+            const aDate = dateFromValue(a.targetPublicationDate || a.publishedAt)?.getTime() || 0;
+            const bDate = dateFromValue(b.targetPublicationDate || b.publishedAt)?.getTime() || 0;
             return bDate - aDate || b.name.localeCompare(a.name);
         });
 

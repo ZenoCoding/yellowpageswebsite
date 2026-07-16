@@ -21,9 +21,10 @@ import {useAuthors} from "../hooks/useAuthors";
 import {syncAuthorArticleLinks} from "../lib/authors";
 import matter from "gray-matter";
 import {extractImageTokenIds, replaceImageTokensWithFigures} from "../lib/articleImages";
+import {insertInlineImageTokens, repositionLeadingInlineImageTokens} from '../lib/articleMediaPlacement';
 import ImportedMediaPanel from "../components/ImportedMediaPanel";
 import {IMPORT_MEDIA_STORAGE_KEY} from "../lib/importHandoff";
-import {getDraftReviewActions, getDraftReviewContext} from '../lib/articleAutomation';
+import {getDraftAutomationState, getDraftReviewContext, getDraftReviewItems, isClosedDraftStatus} from '../lib/articleAutomation';
 
 // var user_id = null;
 
@@ -141,6 +142,8 @@ export default function Upload({admins}) {
     const [issueId, setIssueId] = useState('');
     const [draftStatus, setDraftStatus] = useState('needs_review');
     const [draftContext, setDraftContext] = useState(null);
+    const [reviewedBlockers, setReviewedBlockers] = useState([]);
+    const [previewMode, setPreviewMode] = useState('article');
     const [draftLoaded, setDraftLoaded] = useState(false);
     const [saveState, setSaveState] = useState('');
     const newsroomDraftId = typeof router.query.draftId === 'string' ? router.query.draftId : '';
@@ -217,6 +220,10 @@ export default function Upload({admins}) {
                     const snapshot = await getDoc(doc(db, 'articleDrafts', newsroomDraftId));
                     if (!snapshot.exists()) throw new Error('This newsroom draft no longer exists.');
                     const data = snapshot.data() || {};
+                    const mediaItems = Array.isArray(data.mediaItems) ? data.mediaItems : [];
+                    const repairedMarkdown = repositionLeadingInlineImageTokens(data.markdown || '', mediaItems
+                        .filter((item) => item.role === 'inline' && item.importedImageId)
+                        .map((item) => ({id: item.importedImageId, insertAfterParagraph: item.insertAfterParagraph})));
                     setFormData((previous) => ({
                         ...previous,
                         title: data.title || '',
@@ -228,12 +235,19 @@ export default function Upload({admins}) {
                         imageUrl: data.imageUrl || '',
                         featuredImageId: data.featuredImageId || '',
                         size: data.size || 'normal',
-                        markdown: data.markdown || '',
+                        markdown: repairedMarkdown,
                     }));
-                    setImportedMediaItems(Array.isArray(data.mediaItems) ? data.mediaItems : []);
+                    setImportedMediaItems(mediaItems);
                     setIssueId(data.issueId || '');
                     setDraftStatus(data.status || 'needs_review');
-                    setDraftContext({source: data.source || null, ai: data.ai || null, blockers: data.blockers || []});
+                    setReviewedBlockers(Array.isArray(data.reviewedBlockers) ? data.reviewedBlockers : []);
+                    setDraftContext({
+                        source: data.source || null,
+                        sourceRevision: data.sourceRevision || null,
+                        ai: data.ai || null,
+                        blockers: data.blockers || [],
+                        unmatchedAuthors: data.unmatchedAuthors || [],
+                    });
                     return;
                 }
                 const storedDraft = window.localStorage.getItem(UPLOAD_FORM_DRAFT_KEY);
@@ -265,8 +279,17 @@ export default function Upload({admins}) {
         }
     }, [newsroomDraftId]);
 
+    const automationState = useMemo(() => newsroomDraftId ? getDraftAutomationState({
+        ...draftContext,
+        status: draftStatus,
+        reviewedBlockers,
+    }, formData) : {status: 'ready', blockers: []}, [draftContext, draftStatus, formData, newsroomDraftId, reviewedBlockers]);
+    const remainingBlockers = automationState.blockers;
+    const automaticDraftStatus = automationState.status;
+    const closedDraft = isClosedDraftStatus(draftStatus);
+
     useEffect(() => {
-        if (!isAdmin || !draftLoaded || typeof window === 'undefined') {
+        if (!isAdmin || !draftLoaded || typeof window === 'undefined' || (newsroomDraftId && closedDraft)) {
             return;
         }
         if (uploadDraftTimeoutRef.current) {
@@ -279,7 +302,13 @@ export default function Upload({admins}) {
                     await updateDoc(doc(db, 'articleDrafts', newsroomDraftId), {
                         ...formData,
                         issueId: issueId || null,
-                        status: draftStatus,
+                        status: automaticDraftStatus,
+                        blockers: remainingBlockers,
+                        reviewedBlockers,
+                        unmatchedAuthors: draftContext?.unmatchedAuthors || [],
+                        source: draftContext?.source || null,
+                        sourceRevision: draftContext?.sourceRevision || null,
+                        ai: draftContext?.ai || null,
                         mediaItems: importedMediaItems,
                         updatedAt: serverTimestamp(),
                     });
@@ -298,7 +327,7 @@ export default function Upload({admins}) {
                 clearTimeout(uploadDraftTimeoutRef.current);
             }
         };
-    }, [draftLoaded, draftStatus, formData, importedMediaItems, isAdmin, issueId, newsroomDraftId]);
+    }, [automaticDraftStatus, closedDraft, draftContext?.ai, draftContext?.source, draftContext?.sourceRevision, draftContext?.unmatchedAuthors, draftLoaded, formData, importedMediaItems, isAdmin, issueId, newsroomDraftId, remainingBlockers, reviewedBlockers]);
 
     useEffect(() => {
         if (!isAdmin) {
@@ -563,6 +592,7 @@ export default function Upload({admins}) {
             authorIds: uniqueIds,
             authors: cleanedNames,
         }));
+        if (newsroomDraftId) setDraftContext((previous) => previous ? {...previous, unmatchedAuthors: []} : previous);
     };
 
     if (!user) {
@@ -583,10 +613,23 @@ export default function Upload({admins}) {
         }));
     };
 
-    const handleInsertImageMarkdown = (value) => {
+    const handleInsertImageMarkdown = (value, placement = {}) => {
         const textarea = markdownTextareaRef.current;
         const trimmedValue = typeof value === 'string' ? value.trim() : '';
         const isFigureToken = trimmedValue.startsWith('{{image:');
+        const imageId = isFigureToken ? trimmedValue.match(/^\{\{\s*image:([a-zA-Z0-9_-]+)\s*\}\}$/i)?.[1] : null;
+        if (imageId && placement.automaticPlacement) {
+            setFormData((previous) => ({
+                ...previous,
+                markdown: insertInlineImageTokens(previous.markdown, [{
+                    id: imageId,
+                    insertAfterParagraph: placement.insertAfterParagraph,
+                    sequenceIndex: placement.sequenceIndex,
+                    sequenceCount: placement.sequenceCount,
+                }]),
+            }));
+            return;
+        }
         const markdownSnippet = isFigureToken ? `\n\n${trimmedValue}\n\n` : `![image description](${trimmedValue})`;
 
         if (textarea && typeof textarea.selectionStart === 'number' && typeof textarea.selectionEnd === 'number') {
@@ -614,6 +657,10 @@ export default function Upload({admins}) {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setErrorData('');
+        if (newsroomDraftId) {
+            setErrorData(issueId ? 'Publish this story with its issue.' : 'Newsroom drafts must be published from the newsroom.');
+            return;
+        }
         setIsUploading(true);
 
         // Perform validation checks here
@@ -737,31 +784,55 @@ export default function Upload({admins}) {
     };
 
     // JSX for the form within the Post component
-    const reviewActions = getDraftReviewActions(draftContext || {});
-    const reviewContext = getDraftReviewContext(draftContext || {});
+    const reviewDraft = {...(draftContext || {}), blockers: remainingBlockers};
+    const reviewItems = closedDraft ? [] : getDraftReviewItems(reviewDraft);
+    const reviewContext = getDraftReviewContext(reviewDraft);
+    const confirmBlocker = (blocker) => setReviewedBlockers((current) => Array.from(new Set([...current, blocker])));
+    const applySourceRevision = () => {
+        const revision = draftContext?.sourceRevision;
+        if (!revision || revision.status !== 'pending') return;
+        setFormData((previous) => ({
+            ...previous,
+            title: revision.title || previous.title,
+            authors: revision.authors || previous.authors,
+            authorIds: revision.authorIds || previous.authorIds,
+            blurb: revision.blurb || previous.blurb,
+            tags: revision.tags || previous.tags,
+            markdown: revision.markdown || previous.markdown,
+        }));
+        setImportedMediaItems(Array.isArray(revision.mediaItems) ? revision.mediaItems : importedMediaItems);
+        setReviewedBlockers((current) => Array.from(new Set([...current, 'source changed since import'])));
+        setDraftContext((previous) => ({
+            ...previous,
+            unmatchedAuthors: revision.unmatchedAuthors || [],
+            ai: {...(previous?.ai || {}), ...(revision.ai || {})},
+            source: {...(previous?.source || {}), modifiedTime: revision.modifiedTime || previous?.source?.modifiedTime || null, pendingModifiedTime: null},
+            sourceRevision: {...revision, status: 'applied'},
+        }));
+    };
     return (
         <div className="min-h-screen bg-slate-50 pb-16 text-slate-900">
             <ContentNavbar/>
             <header className="border-b border-slate-200 bg-white">
-                <div className="mx-auto max-w-7xl px-5 py-10 sm:px-8 lg:px-10">
-                    <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                <div className="mx-auto max-w-7xl px-5 py-6 sm:px-8 lg:px-10">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                         <div>
                             <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-600">{newsroomDraftId ? 'Newsroom draft' : 'New story'}</p>
-                            <h1 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">{newsroomDraftId ? formData.title || 'Untitled newsroom draft' : 'Create an article'}</h1>
+                            <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">{newsroomDraftId ? 'Edit draft' : 'Create an article'}</h1>
                         </div>
-                        <div className="flex items-center gap-3"><span className="text-xs font-semibold text-slate-500">{saveState}</span>{newsroomDraftId && <button type="button" onClick={() => router.push('/admin/newsroom')} className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-bold hover:border-slate-900">Back to queue</button>}</div>
+                        <div className="flex items-center gap-3">{newsroomDraftId && <span className={`rounded-full px-3 py-1 text-xs font-bold ${automaticDraftStatus === 'ready' ? 'bg-emerald-100 text-emerald-800' : closedDraft ? 'bg-slate-200 text-slate-700' : 'bg-amber-100 text-amber-900'}`}>{automaticDraftStatus.replaceAll('_', ' ')}</span>}<span className="text-xs font-semibold text-slate-500">{saveState}</span>{newsroomDraftId && <button type="button" onClick={() => router.push('/admin/newsroom')} className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-bold hover:border-slate-900">Back</button>}</div>
                     </div>
                 </div>
             </header>
             <div className="mx-auto mt-8 max-w-7xl px-5 sm:px-8 lg:flex lg:items-start lg:gap-10 lg:px-10">
-                <form onSubmit={handleSubmit} autoComplete="off" className="space-y-6 lg:w-1/2">
-                    {newsroomDraftId && reviewActions.length > 0 && <section className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-5"><p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-700">Needs your attention</p><h2 className="mt-2 text-xl font-bold">Address these items</h2><ul className="mt-3 space-y-2 text-sm text-slate-800">{reviewActions.map((action) => <li key={action} className="flex gap-2"><span className="font-bold text-amber-600">•</span><span>{action}</span></li>)}</ul>{reviewContext.length > 0 && <div className="mt-4 border-t border-amber-200 pt-3"><p className="text-xs font-bold uppercase tracking-wide text-amber-800">Why the automation stopped</p><ul className="mt-2 space-y-1 text-sm text-slate-600">{reviewContext.map((note) => <li key={note}>{note}</li>)}</ul></div>}<p className="mt-4 text-xs leading-5 text-slate-500">After fixing the article, publish it here or return to the issue and run Recheck automation.</p></section>}
-                    {draftContext?.source && <section className="rounded-2xl border border-amber-200 bg-yellow-50 p-5"><p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-700">Imported source</p><div className="mt-2 flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-bold">{draftContext.source.rootName || draftContext.source.sourceName || 'Google Drive submission'}</h2><p className="mt-1 text-sm text-slate-600">{draftContext.source.tabTitle || draftContext.source.documentName || 'Prepared source copy'}</p></div>{draftContext.source.url && <a href={draftContext.source.url} target="_blank" rel="noreferrer" className="text-sm font-bold text-indigo-700 underline">Open original</a>}</div>{draftContext.ai?.warnings?.length > 0 && <details className="mt-4 border-t border-amber-200 pt-3"><summary className="cursor-pointer text-sm font-bold text-amber-900">Review notes ({draftContext.ai.warnings.length})</summary><ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-amber-900">{draftContext.ai.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></details>}</section>}
+                <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4 lg:w-1/2">
+                    {newsroomDraftId && reviewItems.length > 0 && <section className="border-2 border-amber-300 bg-amber-50 p-5"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-700">Needs your attention</p><h2 className="mt-1 text-lg font-bold">{reviewItems.length} {reviewItems.length === 1 ? 'item' : 'items'} left</h2></div><div className="mt-4 divide-y divide-amber-200">{reviewItems.map((item) => <div key={item.blocker} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"><p className="text-sm font-medium text-slate-800">{item.action}</p>{item.confirmable ? <button type="button" onClick={() => confirmBlocker(item.blocker)} className="shrink-0 bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700">Reviewed</button> : item.field ? <a href={`#${item.field}`} className="shrink-0 text-xs font-bold text-amber-800 underline">Fix field</a> : null}</div>)}</div>{reviewContext.length > 0 && <details className="mt-4 border-t border-amber-200 pt-3"><summary className="cursor-pointer text-xs font-bold text-amber-800">Why this was flagged</summary><ul className="mt-2 space-y-1 text-sm text-slate-600">{reviewContext.map((note) => <li key={note}>{note}</li>)}</ul></details>}</section>}
 
-                    <section className={`grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm ${newsroomDraftId ? 'sm:grid-cols-2' : ''}`}>
-                        {newsroomDraftId && <label className="text-sm font-bold text-slate-700">Editorial stage<select value={draftStatus} onChange={(event) => setDraftStatus(event.target.value)} className="mt-2 block w-full rounded-md border border-slate-300 p-2.5 text-sm font-normal"><option value="needs_review">Needs review</option><option value="copy_ready">Copy ready</option><option value="media_ready">Media ready</option><option value="ready">Ready to publish</option><option value="incomplete">Incomplete</option><option value="rejected">Rejected</option></select></label>}
-                        <label className="text-sm font-bold text-slate-700">Issue<select value={issueId} onChange={handleIssueChange} className="mt-2 block w-full rounded-md border border-slate-300 p-2.5 text-sm font-normal"><option value="">No issue</option>{issues.filter((issue) => issue.status !== 'archived').map((issue) => <option key={issue.id} value={issue.id}>{issue.name}{issue.schoolYear ? ` · ${issue.schoolYear}` : ''}{issue.volumeNumber ? ` · Vol. ${issue.volumeNumber}` : ''}{issue.issueNumber ? `, No. ${issue.issueNumber}` : ''}</option>)}</select></label>
-                    </section>
+                    {draftContext?.source && <details className="rounded-xl border border-slate-200 bg-white px-4 py-3"><summary className="cursor-pointer text-sm font-bold text-slate-700">Source details</summary><div className="mt-3 border-t border-slate-100 pt-3"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-semibold">{draftContext.source.rootName || draftContext.source.sourceName || 'Google Drive submission'}</p><p className="mt-1 text-xs text-slate-500">{draftContext.source.tabTitle || draftContext.source.documentName || 'Prepared source copy'}</p></div>{draftContext.source.url && <a href={draftContext.source.url} target="_blank" rel="noreferrer" className="text-xs font-bold text-slate-900 underline">Open original</a>}</div>{draftContext.ai?.warnings?.length > 0 && <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-slate-600">{draftContext.ai.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}</div></details>}
+
+                    {draftContext?.sourceRevision?.status === 'pending' && <section className="border border-amber-300 bg-white p-4"><p className="text-xs font-bold uppercase tracking-wide text-amber-800">Revised source found</p><div className="mt-2 flex flex-wrap items-end justify-between gap-4"><div><p className="font-bold">{draftContext.sourceRevision.title || 'Updated draft'}</p><p className="mt-1 text-sm text-slate-600">{(draftContext.sourceRevision.authors || []).join(', ') || 'Byline unchanged'}</p></div><button type="button" onClick={applySourceRevision} className="bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-700">Use revised source</button></div></section>}
+
+                    <label className="block text-sm font-bold text-slate-700">Issue<select value={issueId} onChange={handleIssueChange} className="mt-2 block w-full rounded-md border border-slate-300 p-2.5 text-sm font-normal"><option value="">No issue</option>{issues.filter((issue) => issue.status !== 'archived').map((issue) => <option key={issue.id} value={issue.id}>{issue.name}{issue.schoolYear ? ` · ${issue.schoolYear}` : ''}{issue.volumeNumber ? ` · Vol. ${issue.volumeNumber}` : ''}{issue.issueNumber ? `, No. ${issue.issueNumber}` : ''}</option>)}</select></label>
                     <div>
                         <label htmlFor="title" className="block text-sm font-medium text-gray-700">
                             Title
@@ -874,6 +945,9 @@ export default function Upload({admins}) {
                         />
                     </div>
 
+                    <details className="rounded-xl border border-slate-200 bg-white p-4">
+                        <summary className="cursor-pointer text-sm font-bold text-slate-700">Images and display options{importedMediaItems.length ? ` · ${importedMediaItems.length} source image${importedMediaItems.length === 1 ? '' : 's'}` : ''}</summary>
+                        <div className="mt-4 space-y-4 border-t border-slate-100 pt-4">
                     <div>
                         <label htmlFor="imageUrl" className="block text-sm font-medium text-gray-700">
                             Image URL
@@ -911,29 +985,30 @@ export default function Upload({admins}) {
                         articleId={draftArticleId}
                     />
 
-                    <div>
-                        <label htmlFor="size" className="block text-sm font-medium text-gray-700">
-                            Front-page size
-                        </label>
+                    <label htmlFor="size" className="block text-sm font-medium text-gray-700">
+                        Front-page size
                         <select
                             id="size"
                             name="size"
                             value={formData.size}
                             onChange={handleChange}
                             autoComplete="off"
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm sm:text-sm p-2"
+                            className="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm"
                         >
                             <option value="normal">Normal</option>
                             <option value="medium">Medium</option>
                             <option value="large">Large</option>
                             <option value="small">Small</option>
                         </select>
-                    </div>
+                    </label>
+
+                        </div>
+                    </details>
 
                     <div>
                         <div className="flex items-center justify-between">
                             <label htmlFor="markdown" className="block text-sm font-medium text-gray-700">
-                                Markdown
+                                Article body
                             </label>
                             <button
                                 type="button"
@@ -960,20 +1035,17 @@ export default function Upload({admins}) {
                        className="text-sm text-slate-500 underline">Formatting guide</a>
 
                     <div className="flex items-center justify-between flex-wrap gap-3">
-                        <button
-                            type="submit"
-                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            disabled={isUploading}
-                        >
-                            {isUploading ? 'Publishing…' : 'Publish article'}
-                        </button>
+                        {newsroomDraftId ? <button type="button" onClick={() => router.push(issueId ? `/admin/issues/${issueId}` : '/admin/newsroom')} className="inline-flex items-center bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700">{issueId ? 'Back to issue' : 'Back to newsroom'}</button> : <button type="submit" className="inline-flex items-center bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700 disabled:opacity-50" disabled={isUploading}>{isUploading ? 'Publishing…' : 'Publish article'}</button>}
                         {errorData && <p className="text-red-500">{errorData}</p>}
                         {uploadData && <p className="text-green-500">{uploadData}</p>}
                     </div>
                 </form>
-                <div className="mt-10 flex flex-col gap-10 lg:mt-0 lg:w-1/2">
-                    <ArticleCardPreview formData={formData}/>
-                    <ArticlePreview formData={formData} html={htmlData}/>
+                <div className="mt-10 lg:sticky lg:top-6 lg:mt-0 lg:w-1/2">
+                    <div className="mb-4 flex border-b border-slate-300">
+                        <button type="button" onClick={() => setPreviewMode('article')} className={`px-4 py-2 text-sm font-bold ${previewMode === 'article' ? 'border-b-2 border-slate-900 text-slate-900' : 'text-slate-500'}`}>Article preview</button>
+                        <button type="button" onClick={() => setPreviewMode('front-page')} className={`px-4 py-2 text-sm font-bold ${previewMode === 'front-page' ? 'border-b-2 border-slate-900 text-slate-900' : 'text-slate-500'}`}>Front-page preview</button>
+                    </div>
+                    {previewMode === 'article' ? <ArticlePreview formData={formData} html={htmlData}/> : <ArticleCardPreview formData={formData}/>}
                 </div>
             </div>
         </div>

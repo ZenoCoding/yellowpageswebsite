@@ -41,7 +41,7 @@ const issueNumber = (issue) => {
 
 export default function PublicIssue({issue, articles}) {
     const numbering = issueNumber(issue);
-    const publicationDate = formatDate(issue.publishedAt || issue.targetPublicationDate);
+    const publicationDate = formatDate(issue.targetPublicationDate || issue.publishedAt);
     const [leadArticle, ...remainingArticles] = articles;
 
     return (

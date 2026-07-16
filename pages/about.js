@@ -1,4 +1,5 @@
 import Head from 'next/head';
+import Link from 'next/link';
 import Navbar from "../components/Navbar.js"
 
 export default function About() {
@@ -24,6 +25,25 @@ export default function About() {
                     </p>
                     <div className="mx-auto mt-10 h-48 max-w-sm sm:h-56">
                         <img src="/images/yellowpages.png" alt="The Yellow Pages" className="h-full w-full object-contain"/>
+                    </div>
+                    <div className="mt-10 grid gap-4 border-y border-slate-300 py-6 sm:grid-cols-2">
+                        <Link href="/staff" className="group block pr-4">
+                            <p className="text-xs font-bold uppercase tracking-[0.22em] text-yellow-700">The masthead</p>
+                            <p className="mt-2 text-lg font-black text-slate-900 group-hover:text-yellow-700">
+                                Meet the staff <span aria-hidden="true">→</span>
+                            </p>
+                        </Link>
+                        <a
+                            href="https://www.instagram.com/_the_yellow_pages_/"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="group block border-t border-slate-200 pt-4 sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0"
+                        >
+                            <p className="text-xs font-bold uppercase tracking-[0.22em] text-yellow-700">Corrections and story ideas</p>
+                            <p className="mt-2 text-lg font-black text-slate-900 group-hover:text-yellow-700">
+                                Contact the newspaper <span aria-hidden="true">↗</span>
+                            </p>
+                        </a>
                     </div>
                 </section>
             </main>

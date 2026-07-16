@@ -1,5 +1,6 @@
 import {useEffect, useMemo, useState} from 'react';
 import {getApp} from 'firebase/app';
+import {getAuth, GoogleAuthProvider, reauthenticateWithPopup} from 'firebase/auth';
 import {addDoc, collection, getFirestore, serverTimestamp} from 'firebase/firestore';
 import {getDownloadURL, getStorage, ref, uploadBytes} from 'firebase/storage';
 import {CheckCircleIcon, PhotoIcon} from '@heroicons/react/24/outline';
@@ -32,19 +33,55 @@ interface ImportedMediaPanelProps {
     articleId?: string | null;
     onItemsChange: (items: ImportedMediaItem[]) => void;
     onSetFeatured: (image: Record<string, string>) => void;
-    onInsertIntoMarkdown: (value: string) => void;
+    onInsertIntoMarkdown: (value: string, placement?: {
+        automaticPlacement?: boolean;
+        insertAfterParagraph?: number | null;
+        sequenceIndex?: number;
+        sequenceCount?: number;
+    }) => void;
     onImageRecordUpdate?: (image: Record<string, unknown>) => void;
 }
 
 const DRIVE_TOKEN_STORAGE_KEY = 'yellowpages-drive-readonly-token-v1';
+const DRIVE_TOKEN_LIFETIME_MS = 50 * 60 * 1000;
 
 const readDriveToken = () => {
     try {
         const cached = JSON.parse(window.sessionStorage.getItem(DRIVE_TOKEN_STORAGE_KEY) || 'null');
-        return cached?.expiresAt > Date.now() ? cached.accessToken : null;
+        if (cached?.accessToken && cached?.expiresAt > Date.now()) return cached.accessToken;
+        window.sessionStorage.removeItem(DRIVE_TOKEN_STORAGE_KEY);
+        return null;
     } catch {
+        window.sessionStorage.removeItem(DRIVE_TOKEN_STORAGE_KEY);
         return null;
     }
+};
+
+const authorizeDrive = async () => {
+    const firebaseUser = getAuth().currentUser;
+    if (!firebaseUser) throw new Error('Your sign-in expired. Sign in again and retry the image.');
+    const provider = new GoogleAuthProvider();
+    provider.addScope('https://www.googleapis.com/auth/drive.readonly');
+    provider.setCustomParameters({login_hint: firebaseUser.email || ''});
+    const result = await reauthenticateWithPopup(firebaseUser, provider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    if (!credential?.accessToken) throw new Error('Google did not return Drive access. Please retry.');
+    window.sessionStorage.setItem(DRIVE_TOKEN_STORAGE_KEY, JSON.stringify({
+        accessToken: credential.accessToken,
+        expiresAt: Date.now() + DRIVE_TOKEN_LIFETIME_MS,
+    }));
+    return credential.accessToken;
+};
+
+const downloadDriveSource = async (url: string) => {
+    let accessToken = readDriveToken() || await authorizeDrive();
+    let response = await fetch(url, {headers: {Authorization: `Bearer ${accessToken}`}});
+    if (response.status === 401) {
+        window.sessionStorage.removeItem(DRIVE_TOKEN_STORAGE_KEY);
+        accessToken = await authorizeDrive();
+        response = await fetch(url, {headers: {Authorization: `Bearer ${accessToken}`}});
+    }
+    return response;
 };
 
 const loadImage = (url: string) =>
@@ -87,6 +124,7 @@ export default function ImportedMediaPanel({
     const [busyKey, setBusyKey] = useState<string | null>(null);
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
+    const [expandedKey, setExpandedKey] = useState<string | null>(null);
     const selectedItems = useMemo(() => items.filter((item) => item.role !== 'unused'), [items]);
 
     useEffect(() => {
@@ -119,18 +157,12 @@ export default function ImportedMediaPanel({
             setError('Confirm who owns this image or that permission/license exists before importing it.');
             return;
         }
-        const accessToken = readDriveToken();
-        if (!accessToken) {
-            setError('Drive access expired. Return to the preparation screen and inspect the source again.');
-            return;
-        }
-
         setBusyKey(item.key);
         try {
             const downloadUrl = item.sourceKind === 'drive_file'
                 ? `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(item.sourceId)}?alt=media`
                 : item.fetchUrl;
-            const sourceResponse = await fetch(downloadUrl, {headers: {Authorization: `Bearer ${accessToken}`}});
+            const sourceResponse = await downloadDriveSource(downloadUrl);
             if (!sourceResponse.ok) throw new Error(`Drive image download failed (${sourceResponse.status}).`);
             const optimizedFile = await optimizeImage(await sourceResponse.blob(), item.sourceName);
             const safeName = optimizedFile.name.replace(/\s+/g, '-').toLowerCase();
@@ -163,7 +195,15 @@ export default function ImportedMediaPanel({
             const savedRecord = {...record, id: documentRef.id, createdAt: new Date(), lastUsedAt: new Date()};
             onImageRecordUpdate?.(savedRecord);
             if (item.role === 'featured') onSetFeatured({...savedRecord, id: documentRef.id});
-            if (item.role === 'inline') onInsertIntoMarkdown(`{{image:${documentRef.id}}}`);
+            if (item.role === 'inline') {
+                const inlineItems = items.filter((candidate) => candidate.role === 'inline');
+                onInsertIntoMarkdown(`{{image:${documentRef.id}}}`, {
+                    automaticPlacement: true,
+                    insertAfterParagraph: item.insertAfterParagraph,
+                    sequenceIndex: Math.max(0, inlineItems.findIndex((candidate) => candidate.key === item.key)),
+                    sequenceCount: Math.max(1, inlineItems.length),
+                });
+            }
             updateItem(item.key, {importedImageId: documentRef.id});
             setMessage(`${item.sourceName} imported as ${item.role}.`);
         } catch (importError: any) {
@@ -174,41 +214,33 @@ export default function ImportedMediaPanel({
     };
 
     return (
-        <section className="rounded-xl border border-sky-200 bg-sky-50/70 p-5">
+        <section className="border border-slate-200 bg-white p-4">
             <div className="flex items-start gap-3">
-                <PhotoIcon className="mt-0.5 h-6 w-6 text-sky-700" aria-hidden="true"/>
+                <PhotoIcon className="mt-0.5 h-5 w-5 text-slate-700" aria-hidden="true"/>
                 <div>
                     <h2 className="text-base font-semibold text-slate-900">Source images</h2>
                 </div>
             </div>
 
-            <div className="mt-5 space-y-4">
+            <div className="mt-4 divide-y divide-slate-200 border-y border-slate-200">
                 {items.map((item) => (
-                    <article key={item.key} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                        <div className="flex flex-col gap-4 sm:flex-row">
-                            <div className="h-28 w-full shrink-0 overflow-hidden rounded-md bg-slate-100 sm:w-36">
+                    <article key={item.key} className="py-3">
+                        <div className="flex items-center gap-3">
+                            <div className="h-14 w-16 shrink-0 overflow-hidden bg-slate-100">
                                 {item.previewUrl ? (
                                     // Drive and Docs return short-lived URLs that cannot use Next image optimization.
                                     // eslint-disable-next-line @next/next/no-img-element
                                     <img src={item.previewUrl} alt="" className="h-full w-full object-contain" referrerPolicy="no-referrer"/>
-                                ) : <div className="flex h-full items-center justify-center text-xs text-slate-400">Preview unavailable</div>}
+                                ) : <div className="flex h-full items-center justify-center text-[10px] text-slate-400">No preview</div>}
                             </div>
-                            <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-start justify-between gap-2">
-                                    <div>
-                                        <h3 className="break-words text-sm font-semibold text-slate-900">{item.sourceName}</h3>
-                                        <p className="mt-1 text-xs text-slate-500">
-                                            {item.sourceKind === 'doc_inline' ? 'Embedded in Google Doc' : 'Drive image'}
-                                        </p>
-                                    </div>
-                                    {item.importedImageId && <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700"><CheckCircleIcon className="h-4 w-4"/>Imported</span>}
-                                </div>
+                            <div className="min-w-0 flex-1"><h3 className="truncate text-sm font-semibold text-slate-900">{item.sourceName}</h3><p className="mt-0.5 text-xs text-slate-500">{item.importedImageId ? 'Imported' : item.sourceKind === 'doc_inline' ? 'Embedded image' : 'Drive image'}</p></div>
+                            <select aria-label={`Use ${item.sourceName} as`} value={item.role} onChange={(event) => updateItem(item.key, {role: event.target.value as ImportedMediaItem['role']})} className="w-32 border border-slate-300 p-2 text-xs">
+                                <option value="unused">Do not use</option><option value="featured">Featured</option><option value="inline">Inline</option>
+                            </select>
+                            {item.importedImageId ? <CheckCircleIcon className="h-5 w-5 shrink-0 text-emerald-600"/> : <button type="button" onClick={() => setExpandedKey((current) => current === item.key ? null : item.key)} className="text-xs font-bold text-slate-700 underline">{expandedKey === item.key ? 'Close' : 'Details'}</button>}
+                        </div>
+                        {expandedKey === item.key && !item.importedImageId && <div className="ml-[4.75rem] mt-3 border-t border-slate-100 pt-3">
                                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                                    <label className="text-xs font-medium text-slate-700">Use as
-                                        <select value={item.role} onChange={(event) => updateItem(item.key, {role: event.target.value as ImportedMediaItem['role']})} className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm">
-                                            <option value="unused">Do not import</option><option value="featured">Featured image</option><option value="inline">Inline image</option>
-                                        </select>
-                                    </label>
                                     <label className="text-xs font-medium text-slate-700">Rights/source status
                                         <select value={item.rightsStatus} onChange={(event) => updateItem(item.key, {rightsStatus: event.target.value as ImportedMediaItem['rightsStatus']})} className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm">
                                             <option value="unreviewed">Not reviewed</option><option value="original">Original staff photo/art</option><option value="permission">Permission confirmed</option><option value="licensed">License/public-domain confirmed</option><option value="web_source">Web source found</option><option value="source_not_found">Source not found</option><option value="unknown">Unknown</option>
@@ -226,11 +258,10 @@ export default function ImportedMediaPanel({
                                 </div>
                                 {item.sourceUrl && <a href={item.sourceUrl} target="_blank" rel="noreferrer" className="mt-3 block truncate text-xs font-semibold text-sky-700 hover:underline">Matched source: {item.sourceTitle || item.sourceUrl}</a>}
                                 {item.aiWarning && <p className="mt-3 text-xs text-amber-700">{item.aiWarning}</p>}
-                                <button type="button" onClick={() => importImage(item)} disabled={busyKey === item.key || Boolean(item.importedImageId) || item.role === 'unused'} className="mt-4 rounded-md bg-sky-700 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-50">
+                                <button type="button" onClick={() => importImage(item)} disabled={busyKey === item.key || Boolean(item.importedImageId) || item.role === 'unused'} className="mt-4 bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50">
                                     {busyKey === item.key ? 'Importing…' : item.importedImageId ? 'Imported' : `Import as ${item.role}`}
                                 </button>
-                            </div>
-                        </div>
+                        </div>}
                     </article>
                 ))}
             </div>

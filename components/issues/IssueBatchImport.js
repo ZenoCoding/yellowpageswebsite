@@ -20,7 +20,7 @@ import {
 import * as issueSheetImport from '../../lib/issueSheetImport';
 import {buildImportMediaItems, stripImportedPublicationHeader} from '../../lib/importHandoff';
 import {inspectDriveSource, prepareVisionImages} from '../../lib/manualDriveImport';
-import {deriveVerbatimExcerpt, evaluateAutomationEligibility} from '../../lib/articleAutomation';
+import {deriveVerbatimExcerpt, evaluateAutomationEligibility, isClosedDraftStatus} from '../../lib/articleAutomation';
 
 const DRIVE_TOKEN_STORAGE_KEY = 'yellowpages-drive-readonly-token-v1';
 const DRIVE_TOKEN_LIFETIME_MS = 50 * 60 * 1000;
@@ -90,7 +90,17 @@ const withGoogleToken = async (operation) => {
     }
 };
 
-export const getGoogleDriveAccessToken = () => withGoogleToken(async (token) => token);
+export const getGoogleDriveAccessToken = () => withGoogleToken(async (token) => {
+    const response = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
+        headers: {Authorization: `Bearer ${token}`},
+    });
+    if (!response.ok) {
+        const error = new Error('Google Drive access expired.');
+        error.status = response.status;
+        throw error;
+    }
+    return token;
+});
 
 const extractSheetId = (source) => {
     if (typeof issueSheetImport.extractSpreadsheetId === 'function') return issueSheetImport.extractSpreadsheetId(source);
@@ -175,9 +185,10 @@ const matchOrCreateSheetAuthors = async (names, authors, db) => {
 
 const statusStyle = {
     queued: 'bg-slate-100 text-slate-600',
-    working: 'bg-indigo-50 text-indigo-700',
+    working: 'bg-yellow-100 text-slate-800',
     imported: 'bg-emerald-50 text-emerald-700',
     existing: 'bg-amber-50 text-amber-800',
+    changed: 'bg-amber-200 text-amber-950',
     failed: 'bg-rose-50 text-rose-700',
 };
 
@@ -193,7 +204,7 @@ export default function IssueBatchImport({issue, issueId, authors = [], existing
     const [sheetStatuses, setSheetStatuses] = useState([]);
     const [items, setItems] = useState([]);
 
-    const selectedCount = items.filter((item) => item.selected && !['imported', 'existing'].includes(item.status)).length;
+    const selectedCount = items.filter((item) => item.selected && !['imported', 'existing', 'changed'].includes(item.status)).length;
     const counts = useMemo(() => items.reduce((result, item) => ({
         ...result,
         [item.status]: (result[item.status] || 0) + 1,
@@ -223,6 +234,7 @@ export default function IssueBatchImport({issue, issueId, authors = [], existing
                 selected: candidate.importable !== false,
                 status: 'queued',
                 error: '',
+                note: '',
                 draftId: '',
             })));
             try {
@@ -244,12 +256,32 @@ export default function IssueBatchImport({issue, issueId, authors = [], existing
         }
     };
 
-    const importOne = async (item, accessToken, batchId) => {
+    const importOne = async (item, batchId) => {
         const {candidate, key} = item;
         updateItem(key, {status: 'working', error: ''});
+        const db = getFirestore(getApp());
+        const batchItemRef = doc(db, 'importBatches', batchId, 'items', key.replaceAll('/', '%2F'));
+        const durableCandidate = JSON.parse(JSON.stringify(candidate));
+        await setDoc(batchItemRef, {status: 'working', candidate: durableCandidate, updatedAt: serverTimestamp()}, {merge: true});
         try {
-            const inspection = await inspectDriveSource({source: candidateUrl(candidate), accessToken});
-            const vision = await prepareVisionImages({inspection, accessToken, maximumImages: 6});
+            const anticipatedSourceKey = candidate.fileId ? `${issueId}:${candidate.fileId}`.replaceAll('/', '%2F') : null;
+            const anticipatedRef = anticipatedSourceKey ? doc(db, 'articleDrafts', anticipatedSourceKey) : null;
+            const anticipatedDraft = anticipatedRef ? await getDoc(anticipatedRef) : null;
+            const anticipatedData = anticipatedDraft?.exists() ? anticipatedDraft.data() : null;
+            const inspection = await withGoogleToken((accessToken) => inspectDriveSource({source: candidateUrl(candidate), accessToken}));
+            const inspectedSource = inspection.documents?.find((document) => document.id === anticipatedData?.source?.documentId)
+                || inspection.pdfFiles?.find((file) => file.id === anticipatedData?.source?.documentId)
+                || inspection.documents?.[0]
+                || inspection.pdfFiles?.[0]
+                || inspection.root;
+            const inspectedModifiedTime = inspectedSource?.modifiedTime || null;
+            if (anticipatedRef && anticipatedData && inspectedModifiedTime && inspectedModifiedTime === anticipatedData.source?.modifiedTime) {
+                await updateDoc(anticipatedRef, {'source.lastCheckedAt': serverTimestamp(), lastImportBatchId: batchId});
+                await setDoc(batchItemRef, {status: 'existing', draftId: anticipatedRef.id, completedAt: serverTimestamp(), updatedAt: serverTimestamp()}, {merge: true});
+                updateItem(key, {status: 'existing', draftId: anticipatedRef.id});
+                return {status: 'existing', draftId: anticipatedRef.id};
+            }
+            const vision = await withGoogleToken((accessToken) => prepareVisionImages({inspection, accessToken, maximumImages: 6}));
             const firebaseUser = getAuth().currentUser;
             if (!firebaseUser) throw new Error('Your sign-in expired. Sign in and retry this item.');
             const response = await fetch('/api/admin/analyze-article', {
@@ -264,30 +296,28 @@ export default function IssueBatchImport({issue, issueId, authors = [], existing
             if (!response.ok) throw new Error(payload?.error || 'AI preparation failed.');
 
             const analysis = payload.analysis || {};
-            const documentId = analysis.selectedDocumentId || inspection.documents?.[0]?.id || inspection.root?.id;
+            const documentId = analysis.selectedDocumentId || inspection.documents?.[0]?.id || inspection.pdfFiles?.[0]?.id || inspection.root?.id;
             const selectedDocument = inspection.documents?.find((document) => document.id === documentId) || inspection.documents?.[0];
+            const selectedPdf = inspection.pdfFiles?.find((file) => file.id === documentId) || inspection.pdfFiles?.[0];
             const selectedTab = selectedDocument?.tabs?.find((tab) => tab.id === analysis.selectedTabId) || selectedDocument?.tabs?.[0];
             if (!documentId) throw new Error('No readable Google Doc was found in this folder.');
             const articleFolderId = candidate.fileId || inspection.root?.id || documentId;
             const sourceKey = `${issueId}:${articleFolderId}`.replaceAll('/', '%2F');
-            const db = getFirestore(getApp());
             const draftRef = doc(db, 'articleDrafts', sourceKey);
             const legacyDraftRef = doc(db, 'articleDrafts', `${documentId}:${selectedTab?.id || 'document'}`.replaceAll('/', '%2F'));
             const existingDraft = await getDoc(draftRef);
             const legacyDraft = existingDraft.exists() ? null : await getDoc(legacyDraftRef);
-            const matchedExistingRef = existingDraft.exists() ? draftRef : legacyDraft?.exists() ? legacyDraftRef : null;
+            const matchedExistingRef = existingDraft.exists() ? draftRef : legacyDraft?.exists() && legacyDraft.data()?.issueId === issueId ? legacyDraftRef : null;
             const existingData = matchedExistingRef ? (existingDraft.exists() ? existingDraft.data() : legacyDraft.data()) : null;
-            if (matchedExistingRef && existingData?.status === 'published') {
-                updateItem(key, {status: 'existing', draftId: matchedExistingRef.id});
-                return {status: 'existing', draftId: matchedExistingRef.id};
-            }
             const targetDraftRef = matchedExistingRef || draftRef;
 
             const sheetAuthorResult = await matchOrCreateSheetAuthors(candidate.contributors || [candidate.contributor], authors, db);
             const aiAuthorResult = matchAuthors(analysis.authors || [], authors);
             const authorResult = sheetAuthorResult.authorIds.length ? sheetAuthorResult : aiAuthorResult;
-            const aiDisagreesWithSheet = sheetAuthorResult.authorIds.length > 0 && aiAuthorResult.authorIds.length > 0
-                && aiAuthorResult.authorIds.some((authorId) => !sheetAuthorResult.authorIds.includes(authorId));
+            const sheetNames = new Set((candidate.contributors || [candidate.contributor]).map(normalizeName).filter(Boolean));
+            const aiNames = new Set((analysis.authors || []).map(normalizeName).filter(Boolean));
+            const aiDisagreesWithSheet = aiNames.size > 0
+                && (aiNames.size !== sheetNames.size || [...aiNames].some((name) => !sheetNames.has(name)));
             const markdown = stripImportedPublicationHeader({
                 markdown: analysis.articleMarkdown || '',
                 title: analysis.title || '',
@@ -302,16 +332,48 @@ export default function IssueBatchImport({issue, issueId, authors = [], existing
                 date: issue?.targetPublicationDate,
                 tags: analysis.suggestedTags,
                 markdown,
-                analysis,
+                analysis: {...analysis, spreadsheetBylineMismatch: aiDisagreesWithSheet},
                 inputTruncated: Boolean(payload.sourceMeta?.inputTruncated),
             });
             const blockers = eligibility.blockers;
-            const matchingPublishedArticle = existingArticles.find((article) =>
-                normalizeName(article.title) === normalizeName(analysis.title)
-            );
-            const duplicateAcrossIssues = matchingPublishedArticle && matchingPublishedArticle.issueId !== issueId;
+            if (matchedExistingRef && existingData) {
+                const pendingBlockers = Array.from(new Set([...(existingData.blockers || []), 'source changed since import']));
+                const reviewedBlockers = (existingData.reviewedBlockers || []).filter((blocker) => blocker !== 'source changed since import');
+                const sourceRevision = JSON.parse(JSON.stringify({
+                    status: 'pending',
+                    modifiedTime: selectedDocument?.modifiedTime || selectedPdf?.modifiedTime || inspectedModifiedTime || null,
+                    title: analysis.title || candidateName(candidate),
+                    authors: authorResult.authors,
+                    authorIds: authorResult.authorIds,
+                    unmatchedAuthors: authorResult.unmatchedAuthors,
+                    blurb,
+                    markdown,
+                    tags: analysis.suggestedTags || [],
+                    mediaItems,
+                    ai: {
+                        model: payload.model || '',
+                        readiness: analysis.readiness || 'needs_review',
+                        confidence: analysis.confidence ?? null,
+                        warnings: analysis.warnings || [],
+                        editorialNotes: analysis.editorialNotes || [],
+                    },
+                }));
+                await updateDoc(matchedExistingRef, {
+                    status: isClosedDraftStatus(existingData.status) ? existingData.status : 'needs_review',
+                    blockers: pendingBlockers,
+                    reviewedBlockers,
+                    sourceRevision: {...sourceRevision, preparedAt: serverTimestamp()},
+                    'source.pendingModifiedTime': sourceRevision.modifiedTime,
+                    'source.lastCheckedAt': serverTimestamp(),
+                    lastImportBatchId: batchId,
+                    updatedAt: serverTimestamp(),
+                });
+                await setDoc(batchItemRef, {status: 'changed', draftId: matchedExistingRef.id, completedAt: serverTimestamp(), updatedAt: serverTimestamp()}, {merge: true});
+                updateItem(key, {status: 'changed', draftId: matchedExistingRef.id, note: 'Source changed; the saved draft was preserved for comparison.'});
+                return {status: 'changed', draftId: matchedExistingRef.id};
+            }
             await setDoc(targetDraftRef, {
-                status: duplicateAcrossIssues ? 'duplicate' : matchingPublishedArticle ? 'published' : eligibility.eligible ? 'ready' : 'needs_review',
+                status: eligibility.eligible ? 'ready' : 'needs_review',
                 title: analysis.title || candidateName(candidate),
                 authors: authorResult.authors,
                 authorIds: authorResult.authorIds,
@@ -329,8 +391,8 @@ export default function IssueBatchImport({issue, issueId, authors = [], existing
                 sourceKey,
                 mediaItems,
                 blockers,
-                publishedArticleId: matchingPublishedArticle?.id || null,
-                duplicateOfArticleId: duplicateAcrossIssues ? matchingPublishedArticle.id : null,
+                publishedArticleId: null,
+                duplicateOfArticleId: null,
                 source: {
                     type: 'google_drive',
                     rootId: inspection.root?.id || null,
@@ -338,10 +400,10 @@ export default function IssueBatchImport({issue, issueId, authors = [], existing
                     rootName: inspection.root?.name || '',
                     url: inspection.root?.webViewLink || candidateUrl(candidate),
                     documentId,
-                    documentName: selectedDocument?.name || '',
+                    documentName: selectedDocument?.name || selectedPdf?.name || '',
                     tabId: selectedTab?.id || null,
                     tabTitle: selectedTab?.title || '',
-                    modifiedTime: selectedDocument?.modifiedTime || null,
+                    modifiedTime: selectedDocument?.modifiedTime || selectedPdf?.modifiedTime || null,
                     spreadsheetId: sheetMeta?.spreadsheetId || null,
                     spreadsheetRange: candidate.sourceCells?.map((cell) => cell.range).filter(Boolean).join(', ') || candidate.range || candidate.cell || null,
                     issueImportBatchId: batchId,
@@ -355,6 +417,7 @@ export default function IssueBatchImport({issue, issueId, authors = [], existing
                     warnings: analysis.warnings || [],
                     editorialNotes: analysis.editorialNotes || [],
                     removedMaterial: analysis.removedMaterial || [],
+                    detectedAuthors: analysis.authors || [],
                     spreadsheetBylineMismatch: aiDisagreesWithSheet,
                     inputTruncated: Boolean(payload.sourceMeta?.inputTruncated),
                     automationEligible: eligibility.eligible,
@@ -364,10 +427,12 @@ export default function IssueBatchImport({issue, issueId, authors = [], existing
                 createdAt: existingData?.createdAt || serverTimestamp(),
                 updatedAt: serverTimestamp(),
             }, {merge: true});
-            const resultStatus = matchingPublishedArticle ? 'existing' : 'imported';
+            const resultStatus = 'imported';
+            await setDoc(batchItemRef, {status: resultStatus, draftId: targetDraftRef.id, completedAt: serverTimestamp(), updatedAt: serverTimestamp()}, {merge: true});
             updateItem(key, {status: resultStatus, draftId: targetDraftRef.id});
             return {status: resultStatus, draftId: targetDraftRef.id};
         } catch (itemError) {
+            await setDoc(batchItemRef, {status: 'failed', error: itemError?.message || 'Import failed.', completedAt: serverTimestamp(), updatedAt: serverTimestamp()}, {merge: true});
             updateItem(key, {status: 'failed', error: itemError?.message || 'Import failed.'});
             return {status: 'failed', error: itemError?.message || 'Import failed.'};
         }
@@ -378,8 +443,7 @@ export default function IssueBatchImport({issue, issueId, authors = [], existing
         setError('');
         setIsRunning(true);
         try {
-            const accessToken = await withGoogleToken(async (token) => token);
-            const queue = items.filter((item) => onlyFailed ? item.status === 'failed' : item.selected && !['imported', 'existing'].includes(item.status));
+            const queue = items.filter((item) => onlyFailed ? item.status === 'failed' : item.selected && !['imported', 'existing', 'changed'].includes(item.status));
             if (!queue.length) throw new Error('Select at least one article to prepare.');
             const db = getFirestore(getApp());
             const batchId = `${issueId}-${Date.now()}`;
@@ -394,6 +458,7 @@ export default function IssueBatchImport({issue, issueId, authors = [], existing
                 totalCount: queue.length,
                 importedCount: 0,
                 existingCount: 0,
+                changedCount: 0,
                 failedCount: 0,
                 createdBy: getAuth().currentUser?.uid || null,
                 createdAt: serverTimestamp(),
@@ -404,7 +469,7 @@ export default function IssueBatchImport({issue, issueId, authors = [], existing
             const worker = async () => {
                 while (nextIndex < queue.length) {
                     const item = queue[nextIndex++];
-                    results.push(await importOne(item, accessToken, batchId));
+                    results.push(await importOne(item, batchId));
                 }
             };
             await Promise.all(Array.from({length: Math.min(CONCURRENCY, queue.length)}, worker));
@@ -413,6 +478,7 @@ export default function IssueBatchImport({issue, issueId, authors = [], existing
                 status: totals.failed ? 'partial' : 'completed',
                 importedCount: totals.imported || 0,
                 existingCount: totals.existing || 0,
+                changedCount: totals.changed || 0,
                 failedCount: totals.failed || 0,
                 completedAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
@@ -426,13 +492,13 @@ export default function IssueBatchImport({issue, issueId, authors = [], existing
     };
 
     return (
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <section className="overflow-hidden border border-slate-200 bg-white">
             <button type="button" onClick={() => setExpanded((value) => !value)} className="flex w-full items-center justify-between gap-5 px-6 py-5 text-left hover:bg-slate-50">
                 <span className="flex items-center gap-4">
-                    <span className="rounded-xl bg-indigo-50 p-3 text-indigo-600"><SparklesIcon className="h-6 w-6"/></span>
+                    <span className="bg-yellow-300 p-3 text-slate-900"><SparklesIcon className="h-6 w-6"/></span>
                     <span>
                         <span className="block font-semibold text-slate-900">Import the whole issue</span>
-                        <span className="mt-1 block text-sm text-slate-500">Scan the tracker and prepare its submissions.</span>
+                        <span className="mt-1 block text-sm text-slate-500">Prepare every linked submission in the selected column.</span>
                     </span>
                 </span>
                 <ChevronDownIcon className={`h-5 w-5 text-slate-400 transition ${expanded ? 'rotate-180' : ''}`}/>
@@ -480,7 +546,7 @@ export default function IssueBatchImport({issue, issueId, authors = [], existing
                         </div>
                         <div className="flex flex-wrap gap-2">
                             {(counts.failed || 0) > 0 && <button type="button" disabled={isRunning} onClick={() => runImport(true)} className="rounded-lg border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50">Retry {counts.failed} failed</button>}
-                            <button type="button" disabled={isRunning || !selectedCount} onClick={() => runImport(false)} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50">
+                            <button type="button" disabled={isRunning || !selectedCount} onClick={() => runImport(false)} className="inline-flex items-center gap-2 bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50">
                                 {isRunning && <ArrowPathIcon className="h-4 w-4 animate-spin"/>} Prepare {selectedCount} draft{selectedCount === 1 ? '' : 's'}
                             </button>
                         </div>
@@ -488,7 +554,7 @@ export default function IssueBatchImport({issue, issueId, authors = [], existing
 
                     <div className="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-200">
                         {items.map((item) => <div key={item.key} className="flex items-start gap-4 p-4">
-                            <input type="checkbox" checked={item.selected} disabled={isRunning || ['imported', 'existing'].includes(item.status)} onChange={(event) => updateItem(item.key, {selected: event.target.checked})} className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"/>
+                            <input type="checkbox" checked={item.selected} disabled={isRunning || ['imported', 'existing', 'changed'].includes(item.status)} onChange={(event) => updateItem(item.key, {selected: event.target.checked})} className="mt-1 h-4 w-4 border-slate-300 text-slate-900 focus:ring-slate-900"/>
                             <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
                                     <p className="font-medium text-slate-900">{candidateName(item.candidate)}</p>
@@ -496,6 +562,7 @@ export default function IssueBatchImport({issue, issueId, authors = [], existing
                                 </div>
                                 <p className="mt-1 truncate text-sm text-slate-500">{item.candidate.contributors?.join(', ') || item.candidate.contributor || item.candidate.sourceCells?.map((cell) => cell.range).join(', ') || item.candidate.cell || candidateUrl(item.candidate)}</p>
                                 {item.error && <p className="mt-2 text-sm text-rose-700">{item.error}</p>}
+                                {item.note && <p className="mt-2 text-sm text-amber-800">{item.note}</p>}
                                 {item.draftId && <a href={`/upload?draftId=${encodeURIComponent(item.draftId)}`} className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 hover:text-indigo-700">Open draft <span aria-hidden="true">→</span></a>}
                             </div>
                             {item.status === 'imported' && <CheckCircleIcon className="h-5 w-5 shrink-0 text-emerald-500"/>}

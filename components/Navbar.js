@@ -27,7 +27,7 @@ export default function Navbar() {
                     <Logo/>
                     <div className="hidden lg:block" /> {/* Placeholder to keep logo centered */}
                 </div>
-                <div className="hidden lg:flex justify-center items-center space-x-6 w-full">
+                <div className="hidden lg:flex justify-center items-center space-x-4 xl:space-x-6 w-full">
                     {navigation.map((item) => (
                         <Link key={item.name} href={item.href} className={`text-lg font-semibold ${router.asPath === item.href ? 'underline text-yellow-500' : 'text-gray-900'} hover:text-gray-500`}>
                             {item.name}

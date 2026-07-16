@@ -34,10 +34,10 @@ export default function ContentNavbar() {
                         <div className="flex-grow lg:flex-grow-0 mr-10">
                             <LogoIcon className="mx-auto h-8 w-auto" alt="Logo"/>
                         </div>
-                        <div className="hidden lg:flex lg:items-center lg:space-x-8">
+                        <div className="hidden lg:flex lg:items-center lg:space-x-3 xl:space-x-6">
                             {navigation.map((item) => (
                                 <Link key={item.name} href={item.href}
-                                      className="text-gray-900 hover:text-gray-700 px-3 py-2 rounded-lg text-sm font-medium">
+                                      className="text-gray-900 hover:text-gray-700 px-2 py-2 rounded-lg text-sm font-medium">
                                     {item.name}
                                 </Link>
                             ))}

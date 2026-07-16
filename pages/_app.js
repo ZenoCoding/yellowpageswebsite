@@ -6,11 +6,19 @@ import React, {useEffect, useState} from 'react'
 import AuthUserProvider from "../firebase/useUser";
 import Loader from "../components/Loader";
 import Head from "next/head"
+import {useRouter} from "next/router";
+import PublicFooter from "../components/PublicFooter";
 import '../styles/global.css';
+
+const FOOTER_EXCLUDED_ROUTES = ['/admin', '/auth', '/edit', '/greyscale', '/upload'];
 
 export default function App({Component, pageProps}) {
     // return <AuthUserProvider><Component {...pageProps} /> </AuthUserProvider>
     const [loading, setLoading] = useState(false);
+    const router = useRouter();
+    const showPublicFooter = !FOOTER_EXCLUDED_ROUTES.some((route) =>
+        router.pathname === route || router.pathname.startsWith(`${route}/`)
+    );
     useEffect(() => {
         const start = () => {
             console.log("start");
@@ -37,7 +45,12 @@ export default function App({Component, pageProps}) {
             {loading ? (
                 <Loader/>
             ) : (
-                <AuthUserProvider><Component {...pageProps} /> </AuthUserProvider>
+                <AuthUserProvider>
+                    <div className="flex min-h-screen flex-col">
+                        <div className="flex-1"><Component {...pageProps}/></div>
+                        {showPublicFooter && <PublicFooter/>}
+                    </div>
+                </AuthUserProvider>
             )}
         </>
     );

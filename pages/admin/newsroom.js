@@ -1,7 +1,7 @@
 import Head from 'next/head';
 import Link from 'next/link';
 import {useCallback, useEffect, useMemo, useState} from 'react';
-import {addDoc, collection, getDocs, getFirestore, serverTimestamp} from 'firebase/firestore';
+import {collection, getDocs, getFirestore} from 'firebase/firestore';
 import {getApp} from 'firebase/app';
 import {
     ArrowLeftIcon,
@@ -9,13 +9,11 @@ import {
     CalendarDaysIcon,
     DocumentPlusIcon,
     InboxStackIcon,
-    PlusIcon,
 } from '@heroicons/react/24/outline';
 import ContentNavbar from '../../components/ContentNavbar';
 import NoAuth from '../../components/auth/NoAuth';
 import {useUser} from '../../firebase/useUser';
 import {getAdmins} from '../../lib/firebase';
-import {createIssueRecord, ISSUE_STATUSES} from '../../lib/newsroom';
 import {compareDraftsForReview, getDraftReviewActions} from '../../lib/articleAutomation';
 
 const STATUS_STYLE = {
@@ -39,9 +37,6 @@ export default function NewsroomQueue({admins}) {
     const [issues, setIssues] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [showIssueForm, setShowIssueForm] = useState(false);
-    const [savingIssue, setSavingIssue] = useState(false);
-    const [issueForm, setIssueForm] = useState({name: '', schoolYear: '', volumeNumber: '', issueNumber: '', targetPublicationDate: ''});
 
     const loadQueue = useCallback(async () => {
         if (!isAdmin) return;
@@ -67,32 +62,8 @@ export default function NewsroomQueue({admins}) {
     if (!user) return <NoAuth/>;
     if (!isAdmin) return <NoAuth permission={true}/>;
 
-    const createIssue = async (event) => {
-        event.preventDefault();
-        setSavingIssue(true);
-        setError('');
-        try {
-            const slug = `${issueForm.name}-${issueForm.schoolYear}`.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-            if (issues.some((issue) => issue.slug === slug)) throw new Error('An issue with this name and school year already exists.');
-            const record = createIssueRecord({...issueForm, slug, status: ISSUE_STATUSES.PLANNING});
-            await addDoc(collection(getFirestore(getApp()), 'issues'), {
-                ...record,
-                createdBy: user.id,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-            });
-            setIssueForm({name: '', schoolYear: '', volumeNumber: '', issueNumber: '', targetPublicationDate: ''});
-            setShowIssueForm(false);
-            await loadQueue();
-        } catch (saveError) {
-            setError(saveError?.message || 'Unable to create the issue.');
-        } finally {
-            setSavingIssue(false);
-        }
-    };
-
     const openDrafts = drafts.filter((draft) => !['published', 'archived', 'rejected', 'duplicate', 'withdrawn'].includes(draft.status)).sort(compareDraftsForReview);
-    const blockedDrafts = openDrafts.filter((draft) => Array.isArray(draft.blockers) && draft.blockers.length > 0);
+    const blockedDrafts = openDrafts.filter((draft) => draft.status === 'needs_review' || getDraftReviewActions(draft).length > 0);
 
     return (
         <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -105,13 +76,14 @@ export default function NewsroomQueue({admins}) {
                         <h1 className="mt-3 text-4xl font-bold tracking-tight sm:text-6xl">Newsroom queue</h1>
                     </div>
                     <div className="flex flex-wrap gap-3">
-                        <Link href="/admin/import" className="inline-flex items-center gap-2 rounded-full bg-yellow-300 px-5 py-3 text-sm font-bold hover:bg-yellow-200"><InboxStackIcon className="h-5 w-5"/>Import from Drive</Link>
+                        <Link href="/admin/issues" className="inline-flex items-center gap-2 rounded-full bg-yellow-300 px-5 py-3 text-sm font-bold hover:bg-yellow-200"><CalendarDaysIcon className="h-5 w-5"/>Open issues</Link>
+                        <Link href="/admin/import" className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-5 py-3 text-sm font-bold hover:border-slate-900"><InboxStackIcon className="h-5 w-5"/>Import one article</Link>
                         <Link href="/upload" className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-bold text-white hover:bg-slate-800"><DocumentPlusIcon className="h-5 w-5"/>Blank article</Link>
                     </div>
                 </header>
 
-                <section className="mt-8 grid gap-4 sm:grid-cols-3">
-                    {[['Open drafts', openDrafts.length], ['Blocked', blockedDrafts.length], ['Issues', issues.length]].map(([label, value]) => <div key={label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">{label}</p><p className="mt-2 text-4xl font-bold">{value}</p></div>)}
+                <section className="mt-8 flex flex-wrap gap-x-8 gap-y-3 border-y border-slate-200 py-4">
+                    {[['Open drafts', openDrafts.length], ['Need attention', blockedDrafts.length], ['Issues', issues.length]].map(([label, value]) => <p key={label} className="text-sm text-slate-600"><span className="font-bold text-slate-900">{value}</span> {label.toLowerCase()}</p>)}
                 </section>
 
                 {error && <p role="alert" className="mt-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{error}</p>}
@@ -132,9 +104,8 @@ export default function NewsroomQueue({admins}) {
                     </div>
 
                     <aside>
-                        <div className="flex items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Editions</p><h2 className="mt-2 text-2xl font-bold">Issues</h2></div><div className="flex items-center gap-2"><Link href="/admin/issues" className="text-xs font-bold text-indigo-700 hover:underline">Manage</Link><button onClick={() => setShowIssueForm((value) => !value)} className="rounded-full bg-slate-900 p-2 text-white"><PlusIcon className="h-4 w-4"/></button></div></div>
-                        {showIssueForm && <form onSubmit={createIssue} className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><label className="block text-xs font-bold text-slate-700">Issue name<input required value={issueForm.name} onChange={(event) => setIssueForm({...issueForm, name: event.target.value})} placeholder="Winter 2026" className="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm"/></label><label className="block text-xs font-bold text-slate-700">School year<input required value={issueForm.schoolYear} onChange={(event) => setIssueForm({...issueForm, schoolYear: event.target.value})} placeholder="2026–27" className="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm"/></label><div className="grid grid-cols-2 gap-3"><label className="text-xs font-bold text-slate-700">Volume<input type="number" min="1" value={issueForm.volumeNumber} onChange={(event) => setIssueForm({...issueForm, volumeNumber: event.target.value})} className="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm"/></label><label className="text-xs font-bold text-slate-700">Issue no.<input type="number" min="1" value={issueForm.issueNumber} onChange={(event) => setIssueForm({...issueForm, issueNumber: event.target.value})} className="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm"/></label></div><label className="block text-xs font-bold text-slate-700">Issue publication date<input required type="date" value={issueForm.targetPublicationDate} onChange={(event) => setIssueForm({...issueForm, targetPublicationDate: event.target.value})} className="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm"/></label><p className="text-xs leading-5 text-slate-500">This date becomes the default for every article assigned to the issue. Volume and issue numbers remain optional.</p><button disabled={savingIssue} className="w-full rounded-full bg-yellow-300 px-4 py-2.5 text-sm font-bold disabled:opacity-60">{savingIssue ? 'Creating…' : 'Create issue'}</button></form>}
-                        <div className="mt-4 space-y-3">{issues.length === 0 && !loading ? <p className="rounded-2xl border border-dashed border-slate-300 p-5 text-sm text-slate-500">No issues yet. Create one when stories share a deadline or edition.</p> : issues.map((issue) => <div key={issue.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start gap-3"><CalendarDaysIcon className="mt-0.5 h-5 w-5 text-amber-600"/><div><h3 className="font-bold">{issue.name}</h3><p className="mt-1 text-xs text-slate-500">{issue.schoolYear}{issue.volumeNumber ? ` · Vol. ${issue.volumeNumber}` : ''}{issue.issueNumber ? `, No. ${issue.issueNumber}` : ''}</p><p className="mt-2 text-xs font-semibold capitalize text-slate-700">{issue.status}</p></div></div></div>)}</div>
+                        <div className="flex items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Editions</p><h2 className="mt-2 text-2xl font-bold">Issues</h2></div><Link href="/admin/issues" className="text-xs font-bold text-slate-900 underline">Manage</Link></div>
+                        <div className="mt-4 divide-y divide-slate-200 border border-slate-200 bg-white">{issues.length === 0 && !loading ? <p className="p-5 text-sm text-slate-500">No issues yet.</p> : issues.map((issue) => <Link key={issue.id} href={`/admin/issues/${issue.id}`} className="flex items-start gap-3 p-4 hover:bg-yellow-50"><CalendarDaysIcon className="mt-0.5 h-5 w-5 text-amber-600"/><div><h3 className="font-bold">{issue.name}</h3><p className="mt-1 text-xs text-slate-500">{issue.schoolYear}{issue.volumeNumber ? ` · Vol. ${issue.volumeNumber}` : ''}{issue.issueNumber ? `, No. ${issue.issueNumber}` : ''}</p><p className="mt-2 text-xs font-semibold capitalize text-slate-700">{issue.status}</p></div></Link>)}</div>
                     </aside>
                 </section>
             </main>
