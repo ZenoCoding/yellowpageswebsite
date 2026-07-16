@@ -32,6 +32,26 @@ const getLandscapeScore = (article) => {
 
 const isLandscapeImage = (article) => getLandscapeScore(article) >= 1;
 
+const hasFeaturedImage = (article) => (
+    typeof article?.imageUrl === 'string' && article.imageUrl.trim().length > 0
+);
+
+const getArticleTimestamp = (article) => parseDateValue(article?.date)?.getTime() || 0;
+
+const rankForHomepage = (articles) => [...articles].sort((left, right) => {
+    const dateDifference = getArticleTimestamp(right) - getArticleTimestamp(left);
+    if (dateDifference !== 0) {
+        return dateDifference;
+    }
+
+    const imageDifference = Number(hasFeaturedImage(right)) - Number(hasFeaturedImage(left));
+    if (imageDifference !== 0) {
+        return imageDifference;
+    }
+
+    return String(left?.title || '').localeCompare(String(right?.title || ''));
+});
+
 const prioritizeLandscape = (articles) => {
     if (!Array.isArray(articles)) {
         return [];
@@ -189,7 +209,7 @@ export default function Home({ allArticleData, admins }) {
         hobGroup,
         trendingStories,
     } = useMemo(() => {
-        const dataset = Array.isArray(allArticleData) ? allArticleData : [];
+        const dataset = rankForHomepage(Array.isArray(allArticleData) ? allArticleData : []);
         const usedIds = new Set();
         const now = Date.now();
 
@@ -222,17 +242,18 @@ export default function Home({ allArticleData, admins }) {
         };
 
         const selectHeroArticle = () => {
-            const withImage = (articles) => articles.find((article) => {
-                const src = article?.imageUrl;
-                return typeof src === 'string' && src.trim().length > 0;
-            });
-
-            const newsArticles = dataset.filter((article) => matchesCategory(article, 'news'));
+            const newestTimestamp = getArticleTimestamp(dataset[0]);
+            const newestArticles = dataset.filter(
+                (article) => getArticleTimestamp(article) === newestTimestamp
+            );
+            const newsArticles = newestArticles.filter((article) => matchesCategory(article, 'news'));
 
             const heroCandidate =
-                withImage(newsArticles) ||
+                newsArticles.find(hasFeaturedImage) ||
+                newestArticles.find(hasFeaturedImage) ||
                 newsArticles[0] ||
-                withImage(dataset) ||
+                newestArticles[0] ||
+                dataset.find(hasFeaturedImage) ||
                 dataset[0] ||
                 null;
 
@@ -244,7 +265,7 @@ export default function Home({ allArticleData, admins }) {
             return null;
         };
 
-        const takeCategoryArticles = (category, desiredCount, { allowFallback = false, exclude } = {}) => {
+        const takeCategoryArticles = (category, desiredCount, { exclude } = {}) => {
             const selected = [];
             const primaryPool = dataset.filter((article) => matchesCategory(article, category));
             const shouldExclude = typeof exclude === 'function' ? exclude : () => false;
@@ -259,19 +280,17 @@ export default function Home({ allArticleData, admins }) {
                 }
             }
 
-            if (allowFallback) {
-                for (const article of dataset) {
-                    if (shouldExclude(article)) continue;
-                    if (usedIds.has(article.id)) continue;
-                    if (selected.some((picked) => picked.id === article.id)) continue;
-                    selected.push(article);
-                    usedIds.add(article.id);
-                    if (selected.length === desiredCount) {
-                        break;
-                    }
-                }
-            }
+            return selected;
+        };
 
+        const takeLatestHeadlines = (desiredCount) => {
+            const selected = [];
+            for (const article of dataset) {
+                if (usedIds.has(article.id)) continue;
+                selected.push(article);
+                usedIds.add(article.id);
+                if (selected.length === desiredCount) break;
+            }
             return selected;
         };
 
@@ -301,14 +320,14 @@ export default function Home({ allArticleData, admins }) {
 
         return {
             heroArticle: hero,
-            newsRail: takeCategoryArticles('news', 4, { allowFallback: true }),
+            newsRail: takeLatestHeadlines(4),
             featureGroup: prioritizeLandscape(
-                takeCategoryArticles('feature', 6, { allowFallback: true, exclude: isHumansOfBasis })
+                takeCategoryArticles('feature', 6, { exclude: isHumansOfBasis })
             ),
-            aeGroup: prioritizeLandscape(takeCategoryArticles('ae', 6, { allowFallback: true })),
-            opinionGroup: takeCategoryArticles('opinion', 4, { allowFallback: true }),
-            sportsGroup: prioritizeLandscape(takeCategoryArticles('sports', 6, { allowFallback: true })),
-        hobGroup: takeCategoryArticles('hob', 4, { allowFallback: true }),
+            aeGroup: prioritizeLandscape(takeCategoryArticles('ae', 6)),
+            opinionGroup: takeCategoryArticles('opinion', 4),
+            sportsGroup: prioritizeLandscape(takeCategoryArticles('sports', 6)),
+            hobGroup: takeCategoryArticles('hob', 4),
             trendingStories: trendingRankings.slice(0, 5),
         };
     }, [allArticleData]);
@@ -513,10 +532,10 @@ export default function Home({ allArticleData, admins }) {
                 </div>
                 <div className="mt-6">
                     <Link
-                        href="/category/news"
+                        href="/issues"
                         className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.25em] text-slate-700 transition-colors duration-200 hover:text-yellow-700"
                     >
-                        More stories in News
+                        Browse all issues
                         <span aria-hidden="true">→</span>
                     </Link>
                 </div>
