@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "pages/api/admin/analyze-article.js": {
+      "maxDuration": 60
+    }
+  }
+}
