@@ -493,12 +493,12 @@ export default function IssueBatchImport({issue, issueId, authors = [], existing
 
     return (
         <section className="overflow-hidden border border-slate-200 bg-white">
-            <button type="button" onClick={() => setExpanded((value) => !value)} className="flex w-full items-center justify-between gap-5 px-6 py-5 text-left hover:bg-slate-50">
+            <button type="button" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)} className="flex w-full items-center justify-between gap-5 px-6 py-5 text-left hover:bg-slate-50">
                 <span className="flex items-center gap-4">
                     <span className="bg-yellow-300 p-3 text-slate-900"><SparklesIcon className="h-6 w-6"/></span>
                     <span>
-                        <span className="block font-semibold text-slate-900">Import the whole issue</span>
-                        <span className="mt-1 block text-sm text-slate-500">Prepare every linked submission in the selected column.</span>
+                        <span className="block font-semibold text-slate-900">Import drafts</span>
+                        <span className="mt-1 block text-sm text-slate-500">Choose which submissions to import from the tracker.</span>
                     </span>
                 </span>
                 <ChevronDownIcon className={`h-5 w-5 text-slate-400 transition ${expanded ? 'rotate-180' : ''}`}/>
@@ -507,7 +507,7 @@ export default function IssueBatchImport({issue, issueId, authors = [], existing
             {expanded && <div className="border-t border-slate-200 px-6 py-6">
                 <form onSubmit={handleScan} className="grid gap-4 lg:grid-cols-[1fr_14rem_auto] lg:items-end">
                     <label className="block text-sm font-medium text-slate-700">
-                        Article tracker spreadsheet
+                        Article tracker
                         <span className="relative mt-2 block">
                             <LinkIcon className="pointer-events-none absolute left-3 top-3 h-5 w-5 text-slate-400"/>
                             <input required type="url" value={sheetUrl} onChange={(event) => setSheetUrl(event.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" className="w-full rounded-lg border border-slate-300 py-2.5 pl-10 pr-3 text-sm focus:border-indigo-500 focus:ring-indigo-500"/>
@@ -518,21 +518,21 @@ export default function IssueBatchImport({issue, issueId, authors = [], existing
                         <input required value={month} onChange={(event) => setMonth(event.target.value)} placeholder="February" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:ring-indigo-500"/>
                     </label>
                     <button disabled={isScanning || isRunning} className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50">
-                        {isScanning && <ArrowPathIcon className="h-4 w-4 animate-spin"/>} Preview issue
+                        {isScanning && <ArrowPathIcon className="h-4 w-4 animate-spin"/>} Find submissions
                     </button>
                 </form>
 
                 {error && <div className="mt-5 flex gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><ExclamationTriangleIcon className="h-5 w-5 shrink-0"/><p>{error}</p></div>}
 
                 {exceptions.length > 0 && <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                    <p className="font-semibold text-amber-900">Spreadsheet exceptions ({exceptions.length})</p>
+                    <p className="font-semibold text-amber-900">Unrecognized tracker entries ({exceptions.length})</p>
                     <ul className="mt-2 space-y-1 text-sm text-amber-800">
                         {exceptions.slice(0, 12).map((exception, index) => <li key={`${exception.cell || index}-${exception.reason || exception}`}>• {exception.label || exception.contributor || exception.cell || exception.message || exception.reason || String(exception)}</li>)}
                     </ul>
                 </div>}
 
                 {sheetStatuses.length > 0 && <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="font-semibold text-slate-900">Not queued ({sheetStatuses.length})</p>
+                    <p className="font-semibold text-slate-900">Skipped tracker entries ({sheetStatuses.length})</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                         {sheetStatuses.slice(0, 20).map((entry, index) => <span key={`${entry.sourceCell?.range || index}-${entry.status}`} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">{entry.contributor || entry.sourceCell?.range}: {entry.status.replaceAll('_', ' ')}</span>)}
                     </div>
@@ -547,7 +547,7 @@ export default function IssueBatchImport({issue, issueId, authors = [], existing
                         <div className="flex flex-wrap gap-2">
                             {(counts.failed || 0) > 0 && <button type="button" disabled={isRunning} onClick={() => runImport(true)} className="rounded-lg border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50">Retry {counts.failed} failed</button>}
                             <button type="button" disabled={isRunning || !selectedCount} onClick={() => runImport(false)} className="inline-flex items-center gap-2 bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50">
-                                {isRunning && <ArrowPathIcon className="h-4 w-4 animate-spin"/>} Prepare {selectedCount} draft{selectedCount === 1 ? '' : 's'}
+                                {isRunning && <ArrowPathIcon className="h-4 w-4 animate-spin"/>} Import {selectedCount} draft{selectedCount === 1 ? '' : 's'}
                             </button>
                         </div>
                     </div>
