@@ -32,6 +32,7 @@ export default function ArticlePreview(props) {
                 By {authorText}
             </div>
 
+            {formData.imageUrl && <img src={formData.imageUrl} alt={props.featuredAltText || ''} className="mb-4 h-auto w-full"/>}
             <div dangerouslySetInnerHTML={{__html: props.html}}/>
         </article>
     </div>;

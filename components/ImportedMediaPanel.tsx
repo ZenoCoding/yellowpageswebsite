@@ -5,12 +5,14 @@ import {addDoc, collection, getFirestore, serverTimestamp} from 'firebase/firest
 import {getDownloadURL, getStorage, ref, uploadBytes} from 'firebase/storage';
 import {CheckCircleIcon, PhotoIcon} from '@heroicons/react/24/outline';
 import {useUser} from '../firebase/useUser';
+import {downloadSourceImage} from '../lib/manualDriveImport';
 
 interface ImportedMediaItem {
     key: string;
     sourceId: string;
     sourceName: string;
     sourceKind: 'drive_file' | 'doc_inline';
+    documentId?: string;
     mimeType: string;
     previewUrl: string;
     fetchUrl: string;
@@ -31,6 +33,7 @@ interface ImportedMediaItem {
 interface ImportedMediaPanelProps {
     items: ImportedMediaItem[];
     articleId?: string | null;
+    source?: {documentId?: string; articleFolderId?: string; rootId?: string} | null;
     onItemsChange: (items: ImportedMediaItem[]) => void;
     onSetFeatured: (image: Record<string, string>) => void;
     onInsertIntoMarkdown: (value: string, placement?: {
@@ -73,15 +76,17 @@ const authorizeDrive = async () => {
     return credential.accessToken;
 };
 
-const downloadDriveSource = async (url: string) => {
+const downloadDriveSource = async (media: ImportedMediaItem, source: ImportedMediaPanelProps['source']) => {
     let accessToken = readDriveToken() || await authorizeDrive();
-    let response = await fetch(url, {headers: {Authorization: `Bearer ${accessToken}`}});
-    if (response.status === 401) {
-        window.sessionStorage.removeItem(DRIVE_TOKEN_STORAGE_KEY);
-        accessToken = await authorizeDrive();
-        response = await fetch(url, {headers: {Authorization: `Bearer ${accessToken}`}});
+    try {
+        const response = await downloadSourceImage({media, source, accessToken});
+        if (response.status !== 401 || media.sourceKind !== 'drive_file') return response;
+    } catch (error: any) {
+        if (error?.status !== 401) throw error;
     }
-    return response;
+    window.sessionStorage.removeItem(DRIVE_TOKEN_STORAGE_KEY);
+    accessToken = await authorizeDrive();
+    return downloadSourceImage({media, source, accessToken});
 };
 
 const loadImage = (url: string) =>
@@ -115,6 +120,7 @@ const optimizeImage = async (blob: Blob, fileName: string) => {
 export default function ImportedMediaPanel({
     items,
     articleId,
+    source,
     onItemsChange,
     onSetFeatured,
     onInsertIntoMarkdown,
@@ -159,10 +165,7 @@ export default function ImportedMediaPanel({
         }
         setBusyKey(item.key);
         try {
-            const downloadUrl = item.sourceKind === 'drive_file'
-                ? `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(item.sourceId)}?alt=media`
-                : item.fetchUrl;
-            const sourceResponse = await downloadDriveSource(downloadUrl);
+            const sourceResponse = await downloadDriveSource(item, source);
             if (!sourceResponse.ok) throw new Error(`Drive image download failed (${sourceResponse.status}).`);
             const optimizedFile = await optimizeImage(await sourceResponse.blob(), item.sourceName);
             const safeName = optimizedFile.name.replace(/\s+/g, '-').toLowerCase();

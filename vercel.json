@@ -2,6 +2,9 @@
   "functions": {
     "pages/api/admin/analyze-article.js": {
       "maxDuration": 60
+    },
+    "pages/api/admin/publish-issue.js": {
+      "maxDuration": 60
     }
   }
 }

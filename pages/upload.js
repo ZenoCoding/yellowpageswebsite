@@ -972,6 +972,7 @@ export default function Upload({admins}) {
                     <ImportedMediaPanel
                         items={importedMediaItems}
                         articleId={draftArticleId}
+                        source={draftContext?.source}
                         onItemsChange={handleImportedMediaChange}
                         onSetFeatured={handleSetFeaturedImage}
                         onInsertIntoMarkdown={handleInsertImageMarkdown}
@@ -1045,7 +1046,7 @@ export default function Upload({admins}) {
                         <button type="button" onClick={() => setPreviewMode('article')} className={`px-4 py-2 text-sm font-bold ${previewMode === 'article' ? 'border-b-2 border-slate-900 text-slate-900' : 'text-slate-500'}`}>Article preview</button>
                         <button type="button" onClick={() => setPreviewMode('front-page')} className={`px-4 py-2 text-sm font-bold ${previewMode === 'front-page' ? 'border-b-2 border-slate-900 text-slate-900' : 'text-slate-500'}`}>Front-page preview</button>
                     </div>
-                    {previewMode === 'article' ? <ArticlePreview formData={formData} html={htmlData}/> : <ArticleCardPreview formData={formData}/>}
+                    {previewMode === 'article' ? <ArticlePreview formData={formData} html={htmlData} featuredAltText={importedMediaItems.find((item) => item.importedImageId && item.importedImageId === formData.featuredImageId)?.altText}/> : <ArticleCardPreview formData={formData}/>}
                 </div>
             </div>
         </div>
